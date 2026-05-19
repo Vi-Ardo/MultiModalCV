@@ -6,6 +6,9 @@ readme = "README.md"
 requires-python = ">=3.11"
 dependencies = []
 
+[tool.setuptools.packages.find]
+include = ["multimodalcv*"]
+
 [project.optional-dependencies]
 dev = [
     "pytest>=8.0",
@@ -19,4 +22,3 @@ markers = [
     "slow: tests that load models, process full videos, or require significant runtime",
     "gpu: tests that require GPU acceleration",
 ]
-
