@@ -174,3 +174,39 @@ The following features are intentionally deferred:
 - Make command handling predictable rather than overly flexible.
 - Keep each milestone demonstrable with a short video example.
 
+## Testing Strategy
+
+Testing should be part of the project from the first implementation stages.
+
+Primary test framework:
+
+- pytest.
+
+Fast tests should cover pure logic without running heavy computer vision models:
+
+- restricted command parser;
+- zone geometry checks;
+- object entry and exit events;
+- empty-zone events;
+- people counting rules;
+- event serialization;
+- basic configuration validation.
+
+Synthetic test data should be used for the rule engine. For example, tests can define a short object track where a person starts outside a zone, crosses its boundary, and ends inside it. This makes event logic reproducible without requiring a real video file.
+
+Detector and tracker tests should support mock implementations:
+
+- fake detector with predefined bounding boxes;
+- fake tracker with predefined track IDs;
+- synthetic scene states for rule evaluation.
+
+Integration tests can use short archived video samples, but they should be separated from the default fast test suite.
+
+Heavy tests should be marked separately:
+
+- tests that load real detection models;
+- tests that run SAM;
+- tests that process full video files;
+- GPU-dependent tests.
+
+Default test runs should stay fast and deterministic. Slow or model-dependent tests should be optional so the project remains easy to develop on machines without a GPU.
