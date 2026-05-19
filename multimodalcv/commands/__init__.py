@@ -1,0 +1,2 @@
+"""Restricted text command parsing."""
+
