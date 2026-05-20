@@ -4,6 +4,7 @@ import argparse
 from pathlib import Path
 
 from multimodalcv.commands.parser import UnsupportedCommandError, parse_command, supported_commands
+from multimodalcv.config.zones import ZoneConfigError, default_zone, parse_zone_rect
 from multimodalcv.core.models import BoundingBox, Detection, Event, EventType, ObjectClass, Track, Zone
 from multimodalcv.detection.base import ObjectDetector
 from multimodalcv.detection.fake import FakeDetector
@@ -32,6 +33,7 @@ def main(argv: list[str] | None = None) -> int:
             confidence_threshold=args.confidence,
             save_frames=args.save_frames,
             frames_dir=args.frames_dir,
+            zone_rect=args.zone_rect,
         )
     except UnsupportedCommandError as error:
         print(error)
@@ -39,7 +41,7 @@ def main(argv: list[str] | None = None) -> int:
         for command in supported_commands():
             print(f"- {command}")
         return 2
-    except (VideoOpenError, ValueError, YOLODependencyError) as error:
+    except (VideoOpenError, ValueError, YOLODependencyError, ZoneConfigError) as error:
         print(error)
         return 2
 
@@ -101,6 +103,10 @@ def build_parser() -> argparse.ArgumentParser:
         default=Path("outputs/analyze/frames"),
         help="Directory for annotated frame images.",
     )
+    parser.add_argument(
+        "--zone-rect",
+        help="Zone rectangle in x1,y1,x2,y2 format. Defaults to 0,0,100,100.",
+    )
     return parser
 
 
@@ -115,6 +121,7 @@ def analyze_video(
     confidence_threshold: float = 0.25,
     save_frames: bool = False,
     frames_dir: Path = Path("outputs/analyze/frames"),
+    zone_rect: str | None = None,
 ) -> list[Event]:
     """Analyze a video using the selected detector/tracker scenario."""
     if max_frames < 1:
@@ -131,7 +138,7 @@ def analyze_video(
         confidence_threshold=confidence_threshold,
     )
 
-    zone = make_default_zone(rule.zone_name)
+    zone = make_zone(rule.zone_name, zone_rect)
     result = analyze_frames(
         frames=frames,
         detector=detector,
@@ -147,8 +154,11 @@ def analyze_video(
     return result.events
 
 
-def make_default_zone(name: str = "main") -> Zone:
-    return Zone(name=name, points=((0, 0), (100, 0), (100, 100), (0, 100)))
+def make_zone(name: str, zone_rect: str | None) -> Zone:
+    if zone_rect is None:
+        return default_zone(name=name)
+
+    return parse_zone_rect(zone_rect, name=name)
 
 
 def make_components(

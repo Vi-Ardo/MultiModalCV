@@ -44,6 +44,21 @@ def test_analyze_video_writes_enter_event_json(tmp_path) -> None:
     assert data[0]["object_class"] == "person"
 
 
+def test_analyze_video_uses_custom_zone_rect(tmp_path) -> None:
+    video_path = tmp_path / "sample.mp4"
+    output_path = tmp_path / "events.json"
+    write_sample_video(video_path)
+
+    events = analyze_video(
+        video_path=video_path,
+        command="Сообщи, когда человек войдет в зону",
+        output_path=output_path,
+        zone_rect="200,200,300,300",
+    )
+
+    assert events == []
+
+
 def test_analyze_video_writes_empty_zone_event_json(tmp_path) -> None:
     video_path = tmp_path / "sample.mp4"
     output_path = tmp_path / "events.json"
@@ -121,6 +136,24 @@ def test_analyze_main_returns_error_for_missing_video(tmp_path, capsys) -> None:
     captured = capsys.readouterr()
     assert exit_code == 2
     assert "Cannot open video file" in captured.out
+
+
+def test_analyze_main_returns_error_for_invalid_zone_rect(tmp_path, capsys) -> None:
+    video_path = tmp_path / "sample.mp4"
+    write_sample_video(video_path)
+
+    exit_code = main(
+        [
+            str(video_path),
+            "Посчитай людей в зоне",
+            "--zone-rect",
+            "10,20,5,30",
+        ]
+    )
+
+    captured = capsys.readouterr()
+    assert exit_code == 2
+    assert "zone rectangle" in captured.out
 
 
 class StubYOLODetector:

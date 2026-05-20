@@ -124,10 +124,16 @@ YOLO detector mode:
 .venv\Scripts\multimodalcv-analyze.exe path\to\video.mp4 "Посчитай людей в зоне" --detector yolo --model yolov8n.pt --max-frames 100 --output outputs\yolo\events.json
 ```
 
+Set a custom rectangular zone:
+
+```powershell
+.venv\Scripts\multimodalcv-analyze.exe path\to\video.mp4 "Посчитай людей в зоне" --detector yolo --model yolov8n.pt --zone-rect 100,50,500,400 --max-frames 100 --output outputs\yolo\events.json
+```
+
 Save annotated diagnostic frames:
 
 ```powershell
-.venv\Scripts\multimodalcv-analyze.exe path\to\video.mp4 "Посчитай людей в зоне" --detector yolo --model yolov8n.pt --max-frames 100 --output outputs\yolo\events.json --save-frames --frames-dir outputs\yolo\frames
+.venv\Scripts\multimodalcv-analyze.exe path\to\video.mp4 "Посчитай людей в зоне" --detector yolo --model yolov8n.pt --zone-rect 100,50,500,400 --max-frames 100 --output outputs\yolo\events.json --save-frames --frames-dir outputs\yolo\frames
 ```
 
 Annotated frames include the current zone, detections, tracks, object classes, confidence values, and track IDs.
