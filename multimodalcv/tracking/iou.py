@@ -17,9 +17,16 @@ class _ActiveTrack:
 class IoUTracker(ObjectTracker):
     """Small deterministic tracker that matches detections by IoU."""
 
-    def __init__(self, *, iou_threshold: float = 0.3, max_missed_frames: int = 2) -> None:
+    def __init__(
+        self,
+        *,
+        iou_threshold: float = 0.3,
+        max_missed_frames: int = 15,
+        center_distance_threshold: float = 80.0,
+    ) -> None:
         self._iou_threshold = iou_threshold
         self._max_missed_frames = max_missed_frames
+        self._center_distance_threshold = center_distance_threshold
         self._next_track_id = 1
         self._tracks: list[_ActiveTrack] = []
 
@@ -71,10 +78,17 @@ class IoUTracker(ObjectTracker):
             return None
 
         best_iou, best_track = max(candidates, key=lambda item: item[0])
-        if best_iou < self._iou_threshold:
-            return None
+        if best_iou >= self._iou_threshold:
+            return best_track
 
-        return best_track
+        closest_track = min(
+            (track for _, track in candidates),
+            key=lambda track: bbox_center_distance(track.bbox, detection.bbox),
+        )
+        if bbox_center_distance(closest_track.bbox, detection.bbox) <= self._center_distance_threshold:
+            return closest_track
+
+        return None
 
     def _age_unmatched_tracks(self, matched_track_ids: set[int]) -> None:
         for track in self._tracks:
@@ -105,3 +119,9 @@ def bbox_iou(first: BoundingBox, second: BoundingBox) -> float:
 
     return intersection_area / union_area
 
+
+def bbox_center_distance(first: BoundingBox, second: BoundingBox) -> float:
+    """Calculate Euclidean distance between bounding-box centers."""
+    first_x, first_y = first.center
+    second_x, second_y = second.center
+    return ((first_x - second_x) ** 2 + (first_y - second_y) ** 2) ** 0.5

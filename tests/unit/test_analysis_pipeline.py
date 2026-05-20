@@ -170,6 +170,25 @@ def test_analyze_frames_counts_tracks_in_frame_without_zone_membership() -> None
     assert result.events[0].metadata["count"] == 1
 
 
+def test_analyze_frames_does_not_reenter_known_track_after_missed_detection() -> None:
+    frames = [make_frame(1), make_frame(2), make_frame(3)]
+    detection = make_detection(frame_index=1, center_x=50, center_y=50)
+    returning_detection = make_detection(frame_index=3, center_x=50, center_y=50)
+    track = make_track(frame_index=1, center_x=50, center_y=50)
+    returning_track = make_track(frame_index=3, center_x=50, center_y=50)
+
+    result = analyze_frames(
+        frames=frames,
+        detector=FakeDetector({1: [detection], 3: [returning_detection]}),
+        tracker=FakeTracker({1: [track], 3: [returning_track]}),
+        rule=make_rule(EventType.ENTER_ZONE),
+        zone=make_zone(),
+    )
+
+    assert len(result.events) == 1
+    assert result.events[0].frame_index == 1
+
+
 def test_analyze_frames_handles_empty_input() -> None:
     result = analyze_frames(
         frames=[],

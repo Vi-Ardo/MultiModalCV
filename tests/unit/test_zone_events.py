@@ -141,3 +141,33 @@ def test_ignores_new_track_without_previous_state() -> None:
 
     assert events == []
 
+
+def test_can_treat_new_track_inside_zone_as_enter_event() -> None:
+    current = [make_track(center_x=50, center_y=50, frame_index=2)]
+
+    events = detect_zone_transitions(
+        zone=make_zone(),
+        previous_tracks=[],
+        current_tracks=current,
+        object_class=ObjectClass.PERSON,
+        new_tracks_enter_zone=True,
+    )
+
+    assert len(events) == 1
+    assert events[0].event_type == EventType.ENTER_ZONE
+    assert events[0].track_id == 1
+
+
+def test_known_track_inside_zone_is_not_treated_as_new_enter_event() -> None:
+    current = [make_track(track_id=4, center_x=50, center_y=50, frame_index=2)]
+
+    events = detect_zone_transitions(
+        zone=make_zone(),
+        previous_tracks=[],
+        current_tracks=current,
+        object_class=ObjectClass.PERSON,
+        new_tracks_enter_zone=True,
+        known_track_ids={4},
+    )
+
+    assert events == []

@@ -11,6 +11,8 @@ def detect_zone_transitions(
     previous_tracks: Iterable[Track],
     current_tracks: Iterable[Track],
     object_class: ObjectClass | None = None,
+    new_tracks_enter_zone: bool = False,
+    known_track_ids: set[int] | None = None,
 ) -> list[Event]:
     """Detect object entry and exit events between two frame states."""
     previous_by_id = {track.track_id: track for track in previous_tracks}
@@ -22,6 +24,9 @@ def detect_zone_transitions(
 
         previous_track = previous_by_id.get(current_track.track_id)
         if previous_track is None:
+            is_known_track = known_track_ids is not None and current_track.track_id in known_track_ids
+            if new_tracks_enter_zone and not is_known_track and zone.contains_bbox_center(current_track.bbox):
+                events.append(_build_transition_event(EventType.ENTER_ZONE, zone, current_track))
             continue
 
         if previous_track.object_class != current_track.object_class:
@@ -47,4 +52,3 @@ def _build_transition_event(event_type: EventType, zone: Zone, track: Track) -> 
         track_id=track.track_id,
         object_class=track.object_class,
     )
-

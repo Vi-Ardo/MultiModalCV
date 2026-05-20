@@ -1,5 +1,5 @@
 from multimodalcv.core.models import BoundingBox, Detection, ObjectClass
-from multimodalcv.tracking.iou import IoUTracker, bbox_iou
+from multimodalcv.tracking.iou import IoUTracker, bbox_center_distance, bbox_iou
 
 
 def make_bbox(x1: float, y1: float, x2: float, y2: float) -> BoundingBox:
@@ -35,6 +35,13 @@ def test_bbox_iou_for_non_overlapping_boxes() -> None:
     assert bbox_iou(first, second) == 0.0
 
 
+def test_bbox_center_distance() -> None:
+    first = make_bbox(0, 0, 10, 10)
+    second = make_bbox(3, 4, 13, 14)
+
+    assert bbox_center_distance(first, second) == 5.0
+
+
 def test_iou_tracker_keeps_track_id_for_overlapping_detection() -> None:
     tracker = IoUTracker(iou_threshold=0.2)
 
@@ -46,13 +53,23 @@ def test_iou_tracker_keeps_track_id_for_overlapping_detection() -> None:
 
 
 def test_iou_tracker_creates_new_track_for_distant_detection() -> None:
-    tracker = IoUTracker(iou_threshold=0.2)
+    tracker = IoUTracker(iou_threshold=0.2, center_distance_threshold=30)
 
     first_tracks = tracker.update([make_detection(frame_index=1, bbox=make_bbox(0, 0, 20, 20))])
     second_tracks = tracker.update([make_detection(frame_index=2, bbox=make_bbox(100, 100, 120, 120))])
 
     assert first_tracks[0].track_id == 1
     assert second_tracks[0].track_id == 2
+
+
+def test_iou_tracker_matches_by_center_distance_when_iou_is_low() -> None:
+    tracker = IoUTracker(iou_threshold=0.9, center_distance_threshold=30)
+
+    first_tracks = tracker.update([make_detection(frame_index=1, bbox=make_bbox(0, 0, 20, 20))])
+    second_tracks = tracker.update([make_detection(frame_index=2, bbox=make_bbox(15, 0, 35, 20))])
+
+    assert first_tracks[0].track_id == 1
+    assert second_tracks[0].track_id == 1
 
 
 def test_iou_tracker_does_not_match_different_object_classes() -> None:
@@ -79,4 +96,3 @@ def test_iou_tracker_removes_stale_tracks_after_missed_frames() -> None:
 
     assert first_tracks[0].track_id == 1
     assert new_tracks[0].track_id == 2
-

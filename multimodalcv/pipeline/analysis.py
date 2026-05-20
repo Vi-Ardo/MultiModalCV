@@ -42,6 +42,7 @@ def analyze_frames(
 ) -> AnalysisResult:
     """Analyze decoded frames with detector, tracker, and rule engine."""
     previous_tracks: list[Track] = []
+    known_track_ids: set[int] = set()
     frame_results: list[FrameAnalysis] = []
 
     for frame in frames:
@@ -54,6 +55,7 @@ def analyze_frames(
             current_tracks=current_tracks,
             frame_index=frame.frame_index,
             timestamp_sec=frame.timestamp_sec,
+            known_track_ids=known_track_ids,
         )
         frame_results.append(
             FrameAnalysis(
@@ -64,5 +66,6 @@ def analyze_frames(
             )
         )
         previous_tracks = current_tracks
+        known_track_ids.update(track.track_id for track in current_tracks)
 
     return AnalysisResult(frames=frame_results)

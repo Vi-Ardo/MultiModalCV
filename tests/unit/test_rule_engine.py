@@ -50,6 +50,18 @@ def test_evaluates_enter_zone_rule() -> None:
     assert events[0].event_type == EventType.ENTER_ZONE
 
 
+def test_enter_zone_rule_counts_new_track_inside_zone_as_enter() -> None:
+    events = evaluate_rule(
+        rule=make_rule(EventType.ENTER_ZONE),
+        zone=make_zone(),
+        previous_tracks=[],
+        current_tracks=[make_track(center_x=50, center_y=50, frame_index=2)],
+    )
+
+    assert len(events) == 1
+    assert events[0].event_type == EventType.ENTER_ZONE
+
+
 def test_evaluates_leave_zone_rule() -> None:
     events = evaluate_rule(
         rule=make_rule(EventType.LEAVE_ZONE),

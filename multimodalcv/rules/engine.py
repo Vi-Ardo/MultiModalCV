@@ -17,6 +17,7 @@ def evaluate_rule(
     current_tracks: Iterable[Track],
     frame_index: int | None = None,
     timestamp_sec: float | None = None,
+    known_track_ids: set[int] | None = None,
 ) -> list[Event]:
     """Evaluate a command rule against two scene states."""
     previous_tracks_list = list(previous_tracks)
@@ -28,6 +29,8 @@ def evaluate_rule(
             previous_tracks=previous_tracks_list,
             current_tracks=current_tracks_list,
             object_class=rule.object_class,
+            new_tracks_enter_zone=rule.event_type == EventType.ENTER_ZONE,
+            known_track_ids=known_track_ids,
         )
         return [
             event
