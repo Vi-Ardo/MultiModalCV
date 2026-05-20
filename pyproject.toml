@@ -10,6 +10,7 @@ dependencies = [
 
 [project.scripts]
 multimodalcv-demo = "multimodalcv.cli.demo:main"
+multimodalcv-video = "multimodalcv.cli.video:main"
 
 [tool.setuptools.packages.find]
 include = ["multimodalcv*"]
