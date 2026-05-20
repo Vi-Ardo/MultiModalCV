@@ -2,9 +2,10 @@ import json
 
 import cv2
 import numpy as np
+import pytest
 
 from multimodalcv.cli.analyze import analyze_video, main
-from multimodalcv.core.models import EventType
+from multimodalcv.core.models import BoundingBox, Detection, EventType, ObjectClass
 
 
 def write_sample_video(path, *, frame_count: int = 3, fps: float = 10.0) -> None:
@@ -96,3 +97,60 @@ def test_analyze_main_returns_error_for_missing_video(tmp_path, capsys) -> None:
     captured = capsys.readouterr()
     assert exit_code == 2
     assert "Cannot open video file" in captured.out
+
+
+class StubYOLODetector:
+    def __init__(self, model_path, confidence_threshold, supported_classes):
+        self.model_path = model_path
+        self.confidence_threshold = confidence_threshold
+        self.supported_classes = supported_classes
+
+    def detect(self, frame):
+        center_x = 105 if frame.frame_index == 0 else 95
+        return [
+            Detection(
+                frame_index=frame.frame_index,
+                timestamp_sec=frame.timestamp_sec,
+                object_class=ObjectClass.PERSON,
+                confidence=0.9,
+                bbox=BoundingBox(
+                    x1=center_x - 10,
+                    y1=40,
+                    x2=center_x + 10,
+                    y2=60,
+                ),
+            )
+        ]
+
+
+def test_analyze_video_can_use_yolo_backend_with_stub(tmp_path, monkeypatch) -> None:
+    video_path = tmp_path / "sample.mp4"
+    output_path = tmp_path / "events.json"
+    write_sample_video(video_path)
+    monkeypatch.setattr("multimodalcv.cli.analyze.YOLODetector", StubYOLODetector)
+
+    events = analyze_video(
+        video_path=video_path,
+        command="Сообщи, когда человек войдет в зону",
+        output_path=output_path,
+        detector_name="yolo",
+        model_path=tmp_path / "fake.pt",
+        confidence_threshold=0.5,
+    )
+
+    assert len(events) == 1
+    assert events[0].event_type == EventType.ENTER_ZONE
+
+
+def test_analyze_video_rejects_unknown_detector_backend(tmp_path) -> None:
+    video_path = tmp_path / "sample.mp4"
+    output_path = tmp_path / "events.json"
+    write_sample_video(video_path)
+
+    with pytest.raises(ValueError):
+        analyze_video(
+            video_path=video_path,
+            command="Посчитай людей в зоне",
+            output_path=output_path,
+            detector_name="unknown",
+        )

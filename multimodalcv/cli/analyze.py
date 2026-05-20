@@ -5,10 +5,14 @@ from pathlib import Path
 
 from multimodalcv.commands.parser import UnsupportedCommandError, parse_command, supported_commands
 from multimodalcv.core.models import BoundingBox, Detection, Event, EventType, ObjectClass, Track, Zone
+from multimodalcv.detection.base import ObjectDetector
 from multimodalcv.detection.fake import FakeDetector
+from multimodalcv.detection.yolo import YOLODependencyError, YOLODetector
 from multimodalcv.pipeline.analysis import analyze_frames
 from multimodalcv.reporting.json_report import write_events_json
+from multimodalcv.tracking.base import ObjectTracker
 from multimodalcv.tracking.fake import FakeTracker
+from multimodalcv.tracking.iou import IoUTracker
 from multimodalcv.video.reader import VideoOpenError, VideoFrame, iter_video_frames
 
 
@@ -22,6 +26,9 @@ def main(argv: list[str] | None = None) -> int:
             command=args.command,
             output_path=args.output,
             max_frames=args.max_frames,
+            detector_name=args.detector,
+            model_path=args.model,
+            confidence_threshold=args.confidence,
         )
     except UnsupportedCommandError as error:
         print(error)
@@ -29,7 +36,7 @@ def main(argv: list[str] | None = None) -> int:
         for command in supported_commands():
             print(f"- {command}")
         return 2
-    except (VideoOpenError, ValueError) as error:
+    except (VideoOpenError, ValueError, YOLODependencyError) as error:
         print(error)
         return 2
 
@@ -62,6 +69,24 @@ def build_parser() -> argparse.ArgumentParser:
         default=2,
         help="Maximum number of frames to analyze.",
     )
+    parser.add_argument(
+        "--detector",
+        choices=("fake", "yolo"),
+        default="fake",
+        help="Detector backend to use.",
+    )
+    parser.add_argument(
+        "--model",
+        type=Path,
+        default=Path("yolov8n.pt"),
+        help="YOLO model path or model name when --detector yolo is used.",
+    )
+    parser.add_argument(
+        "--confidence",
+        type=float,
+        default=0.25,
+        help="Detection confidence threshold when --detector yolo is used.",
+    )
     return parser
 
 
@@ -71,14 +96,24 @@ def analyze_video(
     command: str,
     output_path: Path,
     max_frames: int = 2,
+    detector_name: str = "fake",
+    model_path: Path = Path("yolov8n.pt"),
+    confidence_threshold: float = 0.25,
 ) -> list[Event]:
-    """Analyze a video using the current fake detector/tracker scenario."""
+    """Analyze a video using the selected detector/tracker scenario."""
     if max_frames < 1:
         raise ValueError("max_frames must be >= 1")
 
     rule = parse_command(command)
     frames = list(iter_video_frames(video_path, max_frames=max_frames))
-    detector, tracker = make_fake_components(frames, rule.event_type, rule.object_class)
+    detector, tracker = make_components(
+        frames=frames,
+        event_type=rule.event_type,
+        object_class=rule.object_class,
+        detector_name=detector_name,
+        model_path=model_path,
+        confidence_threshold=confidence_threshold,
+    )
 
     result = analyze_frames(
         frames=frames,
@@ -95,11 +130,36 @@ def make_default_zone(name: str = "main") -> Zone:
     return Zone(name=name, points=((0, 0), (100, 0), (100, 100), (0, 100)))
 
 
+def make_components(
+    *,
+    frames: list[VideoFrame],
+    event_type: EventType,
+    object_class: ObjectClass,
+    detector_name: str,
+    model_path: Path,
+    confidence_threshold: float,
+) -> tuple[ObjectDetector, ObjectTracker]:
+    if detector_name == "fake":
+        return make_fake_components(frames, event_type, object_class)
+
+    if detector_name == "yolo":
+        return (
+            YOLODetector(
+                model_path=model_path,
+                confidence_threshold=confidence_threshold,
+                supported_classes={ObjectClass.PERSON, ObjectClass.CAR},
+            ),
+            IoUTracker(),
+        )
+
+    raise ValueError(f"Unsupported detector backend: {detector_name}")
+
+
 def make_fake_components(
     frames: list[VideoFrame],
     event_type: EventType,
     object_class: ObjectClass,
-) -> tuple[FakeDetector, FakeTracker]:
+) -> tuple[ObjectDetector, ObjectTracker]:
     if len(frames) < 2:
         return FakeDetector({}), FakeTracker({})
 
@@ -185,4 +245,3 @@ def make_track(detection: Detection, *, track_id: int) -> Track:
 
 if __name__ == "__main__":
     raise SystemExit(main())
-

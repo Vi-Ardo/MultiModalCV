@@ -20,6 +20,9 @@ include = ["multimodalcv*"]
 dev = [
     "pytest>=8.0",
 ]
+yolo = [
+    "ultralytics>=8.0",
+]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
