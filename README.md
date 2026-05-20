@@ -54,6 +54,12 @@ Install the project with development dependencies:
 python -m pip install -e .[dev]
 ```
 
+Install optional YOLO dependencies for real object detection:
+
+```powershell
+python -m pip install -e .[yolo]
+```
+
 If `python` is not available in PATH, use the Python executable installed on your machine.
 
 ## Run Tests
@@ -95,6 +101,30 @@ The generated JSON report contains structured events such as:
   }
 ]
 ```
+
+## Run Video Inspection
+
+```powershell
+.venv\Scripts\multimodalcv-video.exe path\to\video.mp4 --output-dir outputs\video_inspect --max-frames 5
+```
+
+This writes video metadata and extracted sample frames.
+
+## Run Video Analysis
+
+Fake detector mode:
+
+```powershell
+.venv\Scripts\multimodalcv-analyze.exe path\to\video.mp4 "Сообщи, когда человек войдет в зону" --output outputs\analyze\events.json
+```
+
+YOLO detector mode:
+
+```powershell
+.venv\Scripts\multimodalcv-analyze.exe path\to\video.mp4 "Посчитай людей в зоне" --detector yolo --model yolov8n.pt --max-frames 100 --output outputs\yolo\events.json
+```
+
+The first YOLO run may download model weights such as `yolov8n.pt`. Model weights are intentionally ignored by git.
 
 ## Project Layout
 

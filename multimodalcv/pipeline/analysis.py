@@ -52,6 +52,8 @@ def analyze_frames(
             zone=zone,
             previous_tracks=previous_tracks,
             current_tracks=current_tracks,
+            frame_index=frame.frame_index,
+            timestamp_sec=frame.timestamp_sec,
         )
         frame_results.append(
             FrameAnalysis(
@@ -64,4 +66,3 @@ def analyze_frames(
         previous_tracks = current_tracks
 
     return AnalysisResult(frames=frame_results)
-

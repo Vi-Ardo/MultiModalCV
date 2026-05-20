@@ -12,6 +12,7 @@ data/
 videos/
 outputs/
 runs/
+*.pt
 *.mp4
 *.avi
 *.mov

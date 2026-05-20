@@ -14,6 +14,8 @@ def evaluate_rule(
     zone: Zone,
     previous_tracks: Iterable[Track],
     current_tracks: Iterable[Track],
+    frame_index: int | None = None,
+    timestamp_sec: float | None = None,
 ) -> list[Event]:
     """Evaluate a command rule against two scene states."""
     previous_tracks_list = list(previous_tracks)
@@ -42,13 +44,18 @@ def evaluate_rule(
         return [] if event is None else [event]
 
     if rule.event_type == EventType.COUNT_IN_ZONE:
-        frame_index, timestamp_sec = _current_time(current_tracks_list, previous_tracks_list)
+        event_frame_index, event_timestamp_sec = _current_time(
+            current_tracks_list,
+            previous_tracks_list,
+            frame_index=frame_index,
+            timestamp_sec=timestamp_sec,
+        )
         return [
             build_count_event(
                 zone=zone,
                 tracks=current_tracks_list,
-                frame_index=frame_index,
-                timestamp_sec=timestamp_sec,
+                frame_index=event_frame_index,
+                timestamp_sec=event_timestamp_sec,
                 object_class=rule.object_class,
             )
         ]
@@ -73,7 +80,13 @@ def evaluate_rule(
 def _current_time(
     current_tracks: list[Track],
     previous_tracks: list[Track],
+    *,
+    frame_index: int | None = None,
+    timestamp_sec: float | None = None,
 ) -> tuple[int, float]:
+    if frame_index is not None and timestamp_sec is not None:
+        return frame_index, timestamp_sec
+
     if current_tracks:
         track = current_tracks[0]
         return track.frame_index, track.timestamp_sec
@@ -83,4 +96,3 @@ def _current_time(
         return track.frame_index, track.timestamp_sec
 
     return 0, 0.0
-
