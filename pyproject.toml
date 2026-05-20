@@ -9,6 +9,7 @@ dependencies = [
 ]
 
 [project.scripts]
+multimodalcv-analyze = "multimodalcv.cli.analyze:main"
 multimodalcv-demo = "multimodalcv.cli.demo:main"
 multimodalcv-video = "multimodalcv.cli.video:main"
 
