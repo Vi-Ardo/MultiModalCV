@@ -145,6 +145,15 @@ Save annotated diagnostic frames:
 
 Annotated frames include the current zone, detections, tracks, object classes, confidence values, and track IDs.
 
+The analysis CLI prints a short summary:
+
+```text
+Processed frame(s): 100
+Detector: yolo
+Wrote 100 event(s) to outputs\frame_count\events.json
+Saved 100 annotated frame(s) to outputs\frame_count\frames
+```
+
 The first YOLO run may download model weights such as `yolov8n.pt`. Model weights are intentionally ignored by git.
 
 ## Project Layout

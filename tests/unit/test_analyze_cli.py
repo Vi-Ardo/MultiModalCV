@@ -30,14 +30,16 @@ def test_analyze_video_writes_enter_event_json(tmp_path) -> None:
     output_path = tmp_path / "events.json"
     write_sample_video(video_path)
 
-    events = analyze_video(
+    result = analyze_video(
         video_path=video_path,
         command="Сообщи, когда человек войдет в зону",
         output_path=output_path,
     )
 
-    assert len(events) == 1
-    assert events[0].event_type == EventType.ENTER_ZONE
+    assert len(result.events) == 1
+    assert result.events[0].event_type == EventType.ENTER_ZONE
+    assert result.processed_frames == 2
+    assert result.detector_name == "fake"
 
     data = json.loads(output_path.read_text(encoding="utf-8"))
     assert data[0]["event_type"] == "enter_zone"
@@ -49,14 +51,14 @@ def test_analyze_video_uses_custom_zone_rect(tmp_path) -> None:
     output_path = tmp_path / "events.json"
     write_sample_video(video_path)
 
-    events = analyze_video(
+    result = analyze_video(
         video_path=video_path,
         command="Сообщи, когда человек войдет в зону",
         output_path=output_path,
         zone_rect="200,200,300,300",
     )
 
-    assert events == []
+    assert result.events == []
 
 
 def test_analyze_video_writes_empty_zone_event_json(tmp_path) -> None:
@@ -64,14 +66,14 @@ def test_analyze_video_writes_empty_zone_event_json(tmp_path) -> None:
     output_path = tmp_path / "events.json"
     write_sample_video(video_path)
 
-    events = analyze_video(
+    result = analyze_video(
         video_path=video_path,
         command="Сообщи, когда все люди покинут зону",
         output_path=output_path,
     )
 
-    assert len(events) == 1
-    assert events[0].event_type == EventType.EMPTY_ZONE
+    assert len(result.events) == 1
+    assert result.events[0].event_type == EventType.EMPTY_ZONE
 
 
 def test_analyze_video_writes_count_in_frame_event_json(tmp_path) -> None:
@@ -79,15 +81,15 @@ def test_analyze_video_writes_count_in_frame_event_json(tmp_path) -> None:
     output_path = tmp_path / "events.json"
     write_sample_video(video_path)
 
-    events = analyze_video(
+    result = analyze_video(
         video_path=video_path,
         command="Посчитай людей в кадре",
         output_path=output_path,
     )
 
-    assert len(events) == 2
-    assert events[0].event_type == EventType.COUNT_IN_FRAME
-    assert events[0].metadata["count"] == 1
+    assert len(result.events) == 2
+    assert result.events[0].event_type == EventType.COUNT_IN_FRAME
+    assert result.events[0].metadata["count"] == 1
 
 
 def test_analyze_main_returns_zero_for_supported_command(tmp_path, capsys) -> None:
@@ -106,6 +108,8 @@ def test_analyze_main_returns_zero_for_supported_command(tmp_path, capsys) -> No
 
     captured = capsys.readouterr()
     assert exit_code == 0
+    assert "Processed frame(s): 2" in captured.out
+    assert "Detector: fake" in captured.out
     assert "Wrote 2 event(s)" in captured.out
     assert output_path.exists()
 
@@ -130,6 +134,8 @@ def test_analyze_main_can_save_annotated_frames(tmp_path, capsys) -> None:
 
     assert exit_code == 0
     assert output_path.exists()
+    captured = capsys.readouterr()
+    assert "Saved 2 annotated frame(s)" in captured.out
     assert (frames_dir / "annotated_000000.jpg").exists()
     assert (frames_dir / "annotated_000001.jpg").exists()
 
@@ -202,7 +208,7 @@ def test_analyze_video_can_use_yolo_backend_with_stub(tmp_path, monkeypatch) -> 
     write_sample_video(video_path)
     monkeypatch.setattr("multimodalcv.cli.analyze.YOLODetector", StubYOLODetector)
 
-    events = analyze_video(
+    result = analyze_video(
         video_path=video_path,
         command="Сообщи, когда человек войдет в зону",
         output_path=output_path,
@@ -211,8 +217,9 @@ def test_analyze_video_can_use_yolo_backend_with_stub(tmp_path, monkeypatch) -> 
         confidence_threshold=0.5,
     )
 
-    assert len(events) == 1
-    assert events[0].event_type == EventType.ENTER_ZONE
+    assert len(result.events) == 1
+    assert result.events[0].event_type == EventType.ENTER_ZONE
+    assert result.detector_name == "yolo"
 
 
 def test_analyze_video_rejects_unknown_detector_backend(tmp_path) -> None:

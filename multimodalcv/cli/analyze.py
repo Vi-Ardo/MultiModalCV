@@ -18,12 +18,33 @@ from multimodalcv.tracking.iou import IoUTracker
 from multimodalcv.video.reader import VideoOpenError, VideoFrame, iter_video_frames
 
 
+class AnalyzeResult:
+    """Summary of a video analysis CLI run."""
+
+    def __init__(
+        self,
+        *,
+        events: list[Event],
+        processed_frames: int,
+        detector_name: str,
+        output_path: Path,
+        annotated_frame_count: int = 0,
+        frames_dir: Path | None = None,
+    ) -> None:
+        self.events = events
+        self.processed_frames = processed_frames
+        self.detector_name = detector_name
+        self.output_path = output_path
+        self.annotated_frame_count = annotated_frame_count
+        self.frames_dir = frames_dir
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = build_parser()
     args = parser.parse_args(argv)
 
     try:
-        events = analyze_video(
+        result = analyze_video(
             video_path=args.video,
             command=args.command,
             output_path=args.output,
@@ -45,7 +66,7 @@ def main(argv: list[str] | None = None) -> int:
         print(error)
         return 2
 
-    print(f"Wrote {len(events)} event(s) to {args.output}")
+    print_analysis_summary(result)
     return 0
 
 
@@ -122,7 +143,7 @@ def analyze_video(
     save_frames: bool = False,
     frames_dir: Path = Path("outputs/analyze/frames"),
     zone_rect: str | None = None,
-) -> list[Event]:
+) -> AnalyzeResult:
     """Analyze a video using the selected detector/tracker scenario."""
     if max_frames < 1:
         raise ValueError("max_frames must be >= 1")
@@ -149,9 +170,27 @@ def analyze_video(
     write_events_json(result.events, output_path)
 
     if save_frames:
-        write_annotated_frames(result.frames, frames_dir, zone=zone)
+        frame_paths = write_annotated_frames(result.frames, frames_dir, zone=zone)
+    else:
+        frame_paths = []
 
-    return result.events
+    return AnalyzeResult(
+        events=result.events,
+        processed_frames=len(result.frames),
+        detector_name=detector_name,
+        output_path=output_path,
+        annotated_frame_count=len(frame_paths),
+        frames_dir=frames_dir if save_frames else None,
+    )
+
+
+def print_analysis_summary(result: AnalyzeResult) -> None:
+    print(f"Processed frame(s): {result.processed_frames}")
+    print(f"Detector: {result.detector_name}")
+    print(f"Wrote {len(result.events)} event(s) to {result.output_path}")
+
+    if result.frames_dir is not None:
+        print(f"Saved {result.annotated_frame_count} annotated frame(s) to {result.frames_dir}")
 
 
 def make_zone(name: str, zone_rect: str | None) -> Zone:
