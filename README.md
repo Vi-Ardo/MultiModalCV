@@ -158,6 +158,9 @@ Processed frame(s): 100
 Detector: yolo
 Wrote 100 event(s) to outputs\frame_count\events.json
 Saved 100 annotated frame(s) to outputs\frame_count\frames
+Events:
+- 00:00.00 count_in_frame person count=2
+- 00:00.10 count_in_frame person count=2
 ```
 
 The first YOLO run may download model weights such as `yolov8n.pt`. Model weights are intentionally ignored by git.

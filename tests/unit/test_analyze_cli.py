@@ -4,8 +4,14 @@ import cv2
 import numpy as np
 import pytest
 
-from multimodalcv.cli.analyze import analyze_video, main
-from multimodalcv.core.models import BoundingBox, Detection, EventType, ObjectClass
+from multimodalcv.cli.analyze import (
+    analyze_video,
+    format_event_summary,
+    format_timestamp,
+    main,
+    print_event_summary,
+)
+from multimodalcv.core.models import BoundingBox, Detection, Event, EventType, ObjectClass
 
 
 def write_sample_video(path, *, frame_count: int = 3, fps: float = 10.0) -> None:
@@ -111,6 +117,8 @@ def test_analyze_main_returns_zero_for_supported_command(tmp_path, capsys) -> No
     assert "Processed frame(s): 2" in captured.out
     assert "Detector: fake" in captured.out
     assert "Wrote 2 event(s)" in captured.out
+    assert "Events:" in captured.out
+    assert "count_in_zone person zone=main count=1" in captured.out
     assert output_path.exists()
 
 
@@ -165,6 +173,57 @@ def test_analyze_main_can_save_only_event_frames(tmp_path, capsys) -> None:
     assert "Saved 1 annotated frame(s)" in captured.out
     assert not (frames_dir / "annotated_000000.jpg").exists()
     assert (frames_dir / "annotated_000001.jpg").exists()
+
+
+def test_format_timestamp() -> None:
+    assert format_timestamp(0.0) == "00:00.00"
+    assert format_timestamp(1.23) == "00:01.23"
+    assert format_timestamp(61.05) == "01:01.05"
+
+
+def test_format_event_summary() -> None:
+    event = Event(
+        event_type=EventType.ENTER_ZONE,
+        frame_index=12,
+        timestamp_sec=1.2,
+        zone_name="main",
+        track_id=7,
+        object_class=ObjectClass.PERSON,
+    )
+
+    assert format_event_summary(event) == "00:01.20 enter_zone person track=#7 zone=main"
+
+
+def test_format_event_summary_includes_count() -> None:
+    event = Event(
+        event_type=EventType.COUNT_IN_FRAME,
+        frame_index=12,
+        timestamp_sec=1.2,
+        object_class=ObjectClass.PERSON,
+        metadata={"count": 3},
+    )
+
+    assert format_event_summary(event) == "00:01.20 count_in_frame person count=3"
+
+
+def test_print_event_summary_handles_empty_list(capsys) -> None:
+    print_event_summary([])
+
+    captured = capsys.readouterr()
+    assert "Events: none" in captured.out
+
+
+def test_print_event_summary_limits_long_lists(capsys) -> None:
+    events = [
+        Event(event_type=EventType.COUNT_IN_FRAME, frame_index=index, timestamp_sec=index)
+        for index in range(12)
+    ]
+
+    print_event_summary(events, max_events=10)
+
+    captured = capsys.readouterr()
+    assert captured.out.count("count_in_frame") == 10
+    assert "... 2 more event(s)" in captured.out
 
 
 def test_analyze_main_returns_error_for_unsupported_command(tmp_path, capsys) -> None:

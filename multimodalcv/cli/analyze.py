@@ -201,6 +201,50 @@ def print_analysis_summary(result: AnalyzeResult) -> None:
     if result.frames_dir is not None:
         print(f"Saved {result.annotated_frame_count} annotated frame(s) to {result.frames_dir}")
 
+    print_event_summary(result.events)
+
+
+def print_event_summary(events: list[Event], *, max_events: int = 10) -> None:
+    if not events:
+        print("Events: none")
+        return
+
+    print("Events:")
+    for event in events[:max_events]:
+        print(f"- {format_event_summary(event)}")
+
+    remaining_count = len(events) - max_events
+    if remaining_count > 0:
+        print(f"- ... {remaining_count} more event(s)")
+
+
+def format_event_summary(event: Event) -> str:
+    parts = [
+        format_timestamp(event.timestamp_sec),
+        event.event_type.value,
+    ]
+
+    if event.object_class is not None:
+        parts.append(event.object_class.value)
+
+    if event.track_id is not None:
+        parts.append(f"track=#{event.track_id}")
+
+    if event.zone_name is not None:
+        parts.append(f"zone={event.zone_name}")
+
+    if "count" in event.metadata:
+        parts.append(f"count={event.metadata['count']}")
+
+    return " ".join(parts)
+
+
+def format_timestamp(timestamp_sec: float) -> str:
+    total_centiseconds = int(round(timestamp_sec * 100))
+    minutes, centiseconds_remainder = divmod(total_centiseconds, 60 * 100)
+    seconds, centiseconds = divmod(centiseconds_remainder, 100)
+    return f"{minutes:02d}:{seconds:02d}.{centiseconds:02d}"
+
 
 def select_frames_for_output(frames: list[FrameAnalysis], frame_mode: str) -> list[FrameAnalysis]:
     if frame_mode == "all":
