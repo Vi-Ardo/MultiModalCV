@@ -145,6 +145,12 @@ Save annotated diagnostic frames:
 
 Annotated frames include the current zone, detections, tracks, object classes, confidence values, and track IDs.
 
+Save only frames that produced events:
+
+```powershell
+.venv\Scripts\multimodalcv-analyze.exe path\to\video.mp4 "Сообщи, когда человек войдет в зону" --detector yolo --model yolov8n.pt --zone-rect 100,50,500,400 --max-frames 100 --output outputs\events_only\events.json --save-frames --frames-dir outputs\events_only\frames --frame-mode events
+```
+
 The analysis CLI prints a short summary:
 
 ```text

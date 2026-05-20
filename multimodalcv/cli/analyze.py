@@ -9,7 +9,7 @@ from multimodalcv.core.models import BoundingBox, Detection, Event, EventType, O
 from multimodalcv.detection.base import ObjectDetector
 from multimodalcv.detection.fake import FakeDetector
 from multimodalcv.detection.yolo import YOLODependencyError, YOLODetector
-from multimodalcv.pipeline.analysis import analyze_frames
+from multimodalcv.pipeline.analysis import FrameAnalysis, analyze_frames
 from multimodalcv.reporting.annotate import write_annotated_frames
 from multimodalcv.reporting.json_report import write_events_json
 from multimodalcv.tracking.base import ObjectTracker
@@ -54,6 +54,7 @@ def main(argv: list[str] | None = None) -> int:
             confidence_threshold=args.confidence,
             save_frames=args.save_frames,
             frames_dir=args.frames_dir,
+            frame_mode=args.frame_mode,
             zone_rect=args.zone_rect,
         )
     except UnsupportedCommandError as error:
@@ -125,6 +126,12 @@ def build_parser() -> argparse.ArgumentParser:
         help="Directory for annotated frame images.",
     )
     parser.add_argument(
+        "--frame-mode",
+        choices=("all", "events"),
+        default="all",
+        help="Which annotated frames to save when --save-frames is enabled.",
+    )
+    parser.add_argument(
         "--zone-rect",
         help="Zone rectangle in x1,y1,x2,y2 format. Defaults to 0,0,100,100.",
     )
@@ -142,6 +149,7 @@ def analyze_video(
     confidence_threshold: float = 0.25,
     save_frames: bool = False,
     frames_dir: Path = Path("outputs/analyze/frames"),
+    frame_mode: str = "all",
     zone_rect: str | None = None,
 ) -> AnalyzeResult:
     """Analyze a video using the selected detector/tracker scenario."""
@@ -170,7 +178,8 @@ def analyze_video(
     write_events_json(result.events, output_path)
 
     if save_frames:
-        frame_paths = write_annotated_frames(result.frames, frames_dir, zone=zone)
+        analyses_to_write = select_frames_for_output(result.frames, frame_mode)
+        frame_paths = write_annotated_frames(analyses_to_write, frames_dir, zone=zone)
     else:
         frame_paths = []
 
@@ -191,6 +200,16 @@ def print_analysis_summary(result: AnalyzeResult) -> None:
 
     if result.frames_dir is not None:
         print(f"Saved {result.annotated_frame_count} annotated frame(s) to {result.frames_dir}")
+
+
+def select_frames_for_output(frames: list[FrameAnalysis], frame_mode: str) -> list[FrameAnalysis]:
+    if frame_mode == "all":
+        return frames
+
+    if frame_mode == "events":
+        return [frame for frame in frames if frame.events]
+
+    raise ValueError(f"Unsupported frame output mode: {frame_mode}")
 
 
 def make_zone(name: str, zone_rect: str | None) -> Zone:

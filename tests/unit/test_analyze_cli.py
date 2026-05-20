@@ -140,6 +140,33 @@ def test_analyze_main_can_save_annotated_frames(tmp_path, capsys) -> None:
     assert (frames_dir / "annotated_000001.jpg").exists()
 
 
+def test_analyze_main_can_save_only_event_frames(tmp_path, capsys) -> None:
+    video_path = tmp_path / "sample.mp4"
+    output_path = tmp_path / "events.json"
+    frames_dir = tmp_path / "frames"
+    write_sample_video(video_path)
+
+    exit_code = main(
+        [
+            str(video_path),
+            "Сообщи, когда человек войдет в зону",
+            "--output",
+            str(output_path),
+            "--save-frames",
+            "--frames-dir",
+            str(frames_dir),
+            "--frame-mode",
+            "events",
+        ]
+    )
+
+    captured = capsys.readouterr()
+    assert exit_code == 0
+    assert "Saved 1 annotated frame(s)" in captured.out
+    assert not (frames_dir / "annotated_000000.jpg").exists()
+    assert (frames_dir / "annotated_000001.jpg").exists()
+
+
 def test_analyze_main_returns_error_for_unsupported_command(tmp_path, capsys) -> None:
     video_path = tmp_path / "sample.mp4"
     write_sample_video(video_path)
