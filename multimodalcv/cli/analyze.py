@@ -9,6 +9,7 @@ from multimodalcv.detection.base import ObjectDetector
 from multimodalcv.detection.fake import FakeDetector
 from multimodalcv.detection.yolo import YOLODependencyError, YOLODetector
 from multimodalcv.pipeline.analysis import analyze_frames
+from multimodalcv.reporting.annotate import write_annotated_frames
 from multimodalcv.reporting.json_report import write_events_json
 from multimodalcv.tracking.base import ObjectTracker
 from multimodalcv.tracking.fake import FakeTracker
@@ -29,6 +30,8 @@ def main(argv: list[str] | None = None) -> int:
             detector_name=args.detector,
             model_path=args.model,
             confidence_threshold=args.confidence,
+            save_frames=args.save_frames,
+            frames_dir=args.frames_dir,
         )
     except UnsupportedCommandError as error:
         print(error)
@@ -87,6 +90,17 @@ def build_parser() -> argparse.ArgumentParser:
         default=0.25,
         help="Detection confidence threshold when --detector yolo is used.",
     )
+    parser.add_argument(
+        "--save-frames",
+        action="store_true",
+        help="Save annotated frame images for visual diagnostics.",
+    )
+    parser.add_argument(
+        "--frames-dir",
+        type=Path,
+        default=Path("outputs/analyze/frames"),
+        help="Directory for annotated frame images.",
+    )
     return parser
 
 
@@ -99,6 +113,8 @@ def analyze_video(
     detector_name: str = "fake",
     model_path: Path = Path("yolov8n.pt"),
     confidence_threshold: float = 0.25,
+    save_frames: bool = False,
+    frames_dir: Path = Path("outputs/analyze/frames"),
 ) -> list[Event]:
     """Analyze a video using the selected detector/tracker scenario."""
     if max_frames < 1:
@@ -115,14 +131,19 @@ def analyze_video(
         confidence_threshold=confidence_threshold,
     )
 
+    zone = make_default_zone(rule.zone_name)
     result = analyze_frames(
         frames=frames,
         detector=detector,
         tracker=tracker,
         rule=rule,
-        zone=make_default_zone(rule.zone_name),
+        zone=zone,
     )
     write_events_json(result.events, output_path)
+
+    if save_frames:
+        write_annotated_frames(result.frames, frames_dir, zone=zone)
+
     return result.events
 
 

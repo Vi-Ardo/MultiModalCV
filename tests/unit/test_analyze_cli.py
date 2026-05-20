@@ -79,6 +79,30 @@ def test_analyze_main_returns_zero_for_supported_command(tmp_path, capsys) -> No
     assert output_path.exists()
 
 
+def test_analyze_main_can_save_annotated_frames(tmp_path, capsys) -> None:
+    video_path = tmp_path / "sample.mp4"
+    output_path = tmp_path / "events.json"
+    frames_dir = tmp_path / "frames"
+    write_sample_video(video_path)
+
+    exit_code = main(
+        [
+            str(video_path),
+            "Сообщи, когда человек войдет в зону",
+            "--output",
+            str(output_path),
+            "--save-frames",
+            "--frames-dir",
+            str(frames_dir),
+        ]
+    )
+
+    assert exit_code == 0
+    assert output_path.exists()
+    assert (frames_dir / "annotated_000000.jpg").exists()
+    assert (frames_dir / "annotated_000001.jpg").exists()
+
+
 def test_analyze_main_returns_error_for_unsupported_command(tmp_path, capsys) -> None:
     video_path = tmp_path / "sample.mp4"
     write_sample_video(video_path)

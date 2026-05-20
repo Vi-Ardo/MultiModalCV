@@ -124,6 +124,14 @@ YOLO detector mode:
 .venv\Scripts\multimodalcv-analyze.exe path\to\video.mp4 "Посчитай людей в зоне" --detector yolo --model yolov8n.pt --max-frames 100 --output outputs\yolo\events.json
 ```
 
+Save annotated diagnostic frames:
+
+```powershell
+.venv\Scripts\multimodalcv-analyze.exe path\to\video.mp4 "Посчитай людей в зоне" --detector yolo --model yolov8n.pt --max-frames 100 --output outputs\yolo\events.json --save-frames --frames-dir outputs\yolo\frames
+```
+
+Annotated frames include the current zone, detections, tracks, object classes, confidence values, and track IDs.
+
 The first YOLO run may download model weights such as `yolov8n.pt`. Model weights are intentionally ignored by git.
 
 ## Project Layout
