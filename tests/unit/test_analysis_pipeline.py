@@ -152,6 +152,24 @@ def test_analyze_frames_count_event_uses_frame_time_without_tracks() -> None:
     assert result.events[0].metadata["count"] == 0
 
 
+def test_analyze_frames_counts_tracks_in_frame_without_zone_membership() -> None:
+    frames = [make_frame(1)]
+    detection = make_detection(frame_index=1, center_x=150, center_y=150)
+    track = make_track(frame_index=1, center_x=150, center_y=150)
+
+    result = analyze_frames(
+        frames=frames,
+        detector=FakeDetector({1: [detection]}),
+        tracker=FakeTracker({1: [track]}),
+        rule=make_rule(EventType.COUNT_IN_FRAME),
+        zone=make_zone(),
+    )
+
+    assert len(result.events) == 1
+    assert result.events[0].event_type == EventType.COUNT_IN_FRAME
+    assert result.events[0].metadata["count"] == 1
+
+
 def test_analyze_frames_handles_empty_input() -> None:
     result = analyze_frames(
         frames=[],

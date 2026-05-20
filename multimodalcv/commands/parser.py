@@ -52,6 +52,16 @@ _COMMAND_PATTERNS: tuple[tuple[tuple[str, ...], EventType, ObjectClass], ...] = 
     ),
     (
         (
+            "посчитай людей в кадре",
+            "посчитать людей в кадре",
+            "сколько людей в кадре",
+            "посчитай людей",
+        ),
+        EventType.COUNT_IN_FRAME,
+        ObjectClass.PERSON,
+    ),
+    (
+        (
             "следи за человеком",
             "отслеживай человека",
         ),
@@ -96,4 +106,3 @@ def normalize_command(command: str) -> str:
 def supported_commands() -> tuple[str, ...]:
     """Return canonical examples of supported commands."""
     return tuple(phrases[0] for phrases, _, _ in _COMMAND_PATTERNS)
-

@@ -38,6 +38,13 @@ def test_parses_count_people_command() -> None:
     assert rule.object_class == ObjectClass.PERSON
 
 
+def test_parses_count_people_in_frame_command() -> None:
+    rule = parse_command("Посчитай людей в кадре")
+
+    assert rule.event_type == EventType.COUNT_IN_FRAME
+    assert rule.object_class == ObjectClass.PERSON
+
+
 def test_parses_track_person_command() -> None:
     rule = parse_command("Следи за человеком")
 
@@ -74,4 +81,3 @@ def test_supported_commands_returns_examples() -> None:
 
     assert "сообщи когда человек войдет в зону" in commands
     assert "следи за машиной" in commands
-

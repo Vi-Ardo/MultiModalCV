@@ -19,6 +19,7 @@ class EventType(StrEnum):
     LEAVE_ZONE = "leave_zone"
     EMPTY_ZONE = "empty_zone"
     COUNT_IN_ZONE = "count_in_zone"
+    COUNT_IN_FRAME = "count_in_frame"
     TRACK_OBJECT = "track_object"
 
 
@@ -114,4 +115,3 @@ class Event:
     track_id: int | None = None
     object_class: ObjectClass | None = None
     metadata: dict[str, Any] = field(default_factory=dict)
-

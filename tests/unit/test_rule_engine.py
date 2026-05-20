@@ -101,6 +101,25 @@ def test_evaluates_count_rule() -> None:
     assert events[0].metadata["count"] == 1
 
 
+def test_evaluates_frame_count_rule() -> None:
+    events = evaluate_rule(
+        rule=make_rule(EventType.COUNT_IN_FRAME),
+        zone=make_zone(),
+        previous_tracks=[],
+        current_tracks=[
+            make_track(track_id=1, center_x=50, center_y=50, frame_index=2),
+            make_track(track_id=2, object_class=ObjectClass.CAR, center_x=150, center_y=50, frame_index=2),
+        ],
+        frame_index=2,
+        timestamp_sec=0.2,
+    )
+
+    assert len(events) == 1
+    assert events[0].event_type == EventType.COUNT_IN_FRAME
+    assert events[0].metadata["count"] == 1
+    assert events[0].zone_name is None
+
+
 def test_evaluates_track_object_rule() -> None:
     events = evaluate_rule(
         rule=make_rule(EventType.TRACK_OBJECT, object_class=ObjectClass.CAR),
@@ -116,4 +135,3 @@ def test_evaluates_track_object_rule() -> None:
     assert events[0].event_type == EventType.TRACK_OBJECT
     assert events[0].track_id == 2
     assert events[0].object_class == ObjectClass.CAR
-

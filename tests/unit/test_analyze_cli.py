@@ -74,6 +74,22 @@ def test_analyze_video_writes_empty_zone_event_json(tmp_path) -> None:
     assert events[0].event_type == EventType.EMPTY_ZONE
 
 
+def test_analyze_video_writes_count_in_frame_event_json(tmp_path) -> None:
+    video_path = tmp_path / "sample.mp4"
+    output_path = tmp_path / "events.json"
+    write_sample_video(video_path)
+
+    events = analyze_video(
+        video_path=video_path,
+        command="Посчитай людей в кадре",
+        output_path=output_path,
+    )
+
+    assert len(events) == 2
+    assert events[0].event_type == EventType.COUNT_IN_FRAME
+    assert events[0].metadata["count"] == 1
+
+
 def test_analyze_main_returns_zero_for_supported_command(tmp_path, capsys) -> None:
     video_path = tmp_path / "sample.mp4"
     output_path = tmp_path / "events.json"

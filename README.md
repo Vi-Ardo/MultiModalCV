@@ -28,6 +28,7 @@ Examples:
 Сообщи, когда человек выйдет из зоны
 Сообщи, когда все люди покинут зону
 Посчитай людей в зоне
+Посчитай людей в кадре
 Следи за человеком
 Следи за машиной
 ```
@@ -116,6 +117,12 @@ Fake detector mode:
 
 ```powershell
 .venv\Scripts\multimodalcv-analyze.exe path\to\video.mp4 "Сообщи, когда человек войдет в зону" --output outputs\analyze\events.json
+```
+
+Count people in the whole frame without zone filtering:
+
+```powershell
+.venv\Scripts\multimodalcv-analyze.exe path\to\video.mp4 "Посчитай людей в кадре" --detector yolo --model yolov8n.pt --max-frames 100 --output outputs\frame_count\events.json --save-frames --frames-dir outputs\frame_count\frames
 ```
 
 YOLO detector mode:

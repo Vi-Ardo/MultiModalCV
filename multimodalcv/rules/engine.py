@@ -4,6 +4,7 @@ from collections.abc import Iterable
 
 from multimodalcv.commands.models import CommandRule
 from multimodalcv.core.models import Event, EventType, Track, Zone
+from multimodalcv.rules.frame_counts import build_frame_count_event
 from multimodalcv.rules.occupancy import build_count_event, detect_empty_zone_event
 from multimodalcv.rules.zone_events import detect_zone_transitions
 
@@ -53,6 +54,22 @@ def evaluate_rule(
         return [
             build_count_event(
                 zone=zone,
+                tracks=current_tracks_list,
+                frame_index=event_frame_index,
+                timestamp_sec=event_timestamp_sec,
+                object_class=rule.object_class,
+            )
+        ]
+
+    if rule.event_type == EventType.COUNT_IN_FRAME:
+        event_frame_index, event_timestamp_sec = _current_time(
+            current_tracks_list,
+            previous_tracks_list,
+            frame_index=frame_index,
+            timestamp_sec=timestamp_sec,
+        )
+        return [
+            build_frame_count_event(
                 tracks=current_tracks_list,
                 frame_index=event_frame_index,
                 timestamp_sec=event_timestamp_sec,
