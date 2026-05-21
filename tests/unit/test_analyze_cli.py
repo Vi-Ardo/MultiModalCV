@@ -98,6 +98,21 @@ def test_analyze_video_writes_count_in_frame_event_json(tmp_path) -> None:
     assert result.events[0].metadata["count"] == 1
 
 
+def test_analyze_video_can_smooth_count_events(tmp_path) -> None:
+    video_path = tmp_path / "sample.mp4"
+    output_path = tmp_path / "events.json"
+    write_sample_video(video_path)
+
+    result = analyze_video(
+        video_path=video_path,
+        command="Посчитай людей в кадре",
+        output_path=output_path,
+        count_window_size=3,
+    )
+
+    assert "raw_count" in result.events[0].metadata
+
+
 def test_analyze_main_returns_zero_for_supported_command(tmp_path, capsys) -> None:
     video_path = tmp_path / "sample.mp4"
     output_path = tmp_path / "events.json"
@@ -173,6 +188,26 @@ def test_analyze_main_can_save_only_event_frames(tmp_path, capsys) -> None:
     assert "Saved 1 annotated frame(s)" in captured.out
     assert not (frames_dir / "annotated_000000.jpg").exists()
     assert (frames_dir / "annotated_000001.jpg").exists()
+
+
+def test_analyze_main_accepts_event_cooldown(tmp_path, capsys) -> None:
+    video_path = tmp_path / "sample.mp4"
+    output_path = tmp_path / "events.json"
+    write_sample_video(video_path)
+
+    exit_code = main(
+        [
+            str(video_path),
+            "Сообщи, когда человек войдет в зону",
+            "--output",
+            str(output_path),
+            "--event-cooldown-sec",
+            "2.0",
+        ]
+    )
+
+    assert exit_code == 0
+    assert output_path.exists()
 
 
 def test_format_timestamp() -> None:

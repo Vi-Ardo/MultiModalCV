@@ -151,6 +151,18 @@ Save only frames that produced events:
 .venv\Scripts\multimodalcv-analyze.exe path\to\video.mp4 "Сообщи, когда человек войдет в зону" --detector yolo --model yolov8n.pt --zone-rect 100,50,500,400 --max-frames 100 --output outputs\events_only\events.json --save-frames --frames-dir outputs\events_only\frames --frame-mode events
 ```
 
+Smooth short count spikes:
+
+```powershell
+.venv\Scripts\multimodalcv-analyze.exe path\to\video.mp4 "Посчитай людей в кадре" --detector yolo --model yolov8n.pt --max-frames 100 --count-window-size 5 --output outputs\smoothed_count\events.json
+```
+
+Suppress repeated non-count events:
+
+```powershell
+.venv\Scripts\multimodalcv-analyze.exe path\to\video.mp4 "Сообщи, когда человек войдет в зону" --detector yolo --model yolov8n.pt --zone-rect 100,50,500,400 --max-frames 100 --event-cooldown-sec 2.0 --output outputs\cooldown\events.json
+```
+
 The analysis CLI prints a short summary:
 
 ```text

@@ -56,6 +56,8 @@ def main(argv: list[str] | None = None) -> int:
             frames_dir=args.frames_dir,
             frame_mode=args.frame_mode,
             zone_rect=args.zone_rect,
+            count_window_size=args.count_window_size,
+            event_cooldown_sec=args.event_cooldown_sec,
         )
     except UnsupportedCommandError as error:
         print(error)
@@ -135,6 +137,18 @@ def build_parser() -> argparse.ArgumentParser:
         "--zone-rect",
         help="Zone rectangle in x1,y1,x2,y2 format. Defaults to 0,0,100,100.",
     )
+    parser.add_argument(
+        "--count-window-size",
+        type=int,
+        default=1,
+        help="Moving median window for count events. Use 1 to disable smoothing.",
+    )
+    parser.add_argument(
+        "--event-cooldown-sec",
+        type=float,
+        default=0.0,
+        help="Suppress repeated non-count events with the same type/class/zone within this many seconds.",
+    )
     return parser
 
 
@@ -151,6 +165,8 @@ def analyze_video(
     frames_dir: Path = Path("outputs/analyze/frames"),
     frame_mode: str = "all",
     zone_rect: str | None = None,
+    count_window_size: int = 1,
+    event_cooldown_sec: float = 0.0,
 ) -> AnalyzeResult:
     """Analyze a video using the selected detector/tracker scenario."""
     if max_frames < 1:
@@ -174,6 +190,8 @@ def analyze_video(
         tracker=tracker,
         rule=rule,
         zone=zone,
+        count_window_size=count_window_size,
+        event_cooldown_sec=event_cooldown_sec,
     )
     write_events_json(result.events, output_path)
 

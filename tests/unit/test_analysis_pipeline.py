@@ -31,9 +31,9 @@ def make_detection(*, frame_index: int, center_x: float, center_y: float) -> Det
     )
 
 
-def make_track(*, frame_index: int, center_x: float, center_y: float) -> Track:
+def make_track(*, frame_index: int, center_x: float, center_y: float, track_id: int = 1) -> Track:
     return Track(
-        track_id=1,
+        track_id=track_id,
         frame_index=frame_index,
         timestamp_sec=frame_index / 10,
         object_class=ObjectClass.PERSON,
@@ -168,6 +168,66 @@ def test_analyze_frames_counts_tracks_in_frame_without_zone_membership() -> None
     assert len(result.events) == 1
     assert result.events[0].event_type == EventType.COUNT_IN_FRAME
     assert result.events[0].metadata["count"] == 1
+
+
+def test_analyze_frames_smooths_count_events_with_median_window() -> None:
+    frames = [make_frame(1), make_frame(2), make_frame(3)]
+    person_detection = make_detection(frame_index=1, center_x=50, center_y=50)
+    person_track = make_track(frame_index=1, center_x=50, center_y=50)
+    car_detection = Detection(
+        frame_index=2,
+        timestamp_sec=0.2,
+        object_class=ObjectClass.CAR,
+        confidence=0.9,
+        bbox=BoundingBox(x1=10, y1=10, x2=20, y2=20),
+    )
+    car_track = Track(
+        track_id=2,
+        frame_index=2,
+        timestamp_sec=0.2,
+        object_class=ObjectClass.CAR,
+        bbox=car_detection.bbox,
+    )
+
+    result = analyze_frames(
+        frames=frames,
+        detector=FakeDetector({1: [person_detection], 2: [car_detection], 3: [person_detection]}),
+        tracker=FakeTracker({1: [person_track], 2: [car_track], 3: [person_track]}),
+        rule=make_rule(EventType.COUNT_IN_FRAME),
+        zone=make_zone(),
+        count_window_size=3,
+    )
+
+    assert [event.metadata["raw_count"] for event in result.events] == [1, 0, 1]
+    assert [event.metadata["count"] for event in result.events] == [1, 0, 1]
+
+
+def test_analyze_frames_suppresses_repeated_enter_events_with_cooldown() -> None:
+    frames = [make_frame(1), make_frame(2), make_frame(3)]
+
+    result = analyze_frames(
+        frames=frames,
+        detector=FakeDetector(
+            {
+                1: [make_detection(frame_index=1, center_x=50, center_y=50)],
+                2: [make_detection(frame_index=2, center_x=150, center_y=50)],
+                3: [make_detection(frame_index=3, center_x=50, center_y=50)],
+            }
+        ),
+        tracker=FakeTracker(
+            {
+                1: [make_track(track_id=1, frame_index=1, center_x=50, center_y=50)],
+                2: [make_track(track_id=2, frame_index=2, center_x=150, center_y=50)],
+                3: [make_track(track_id=3, frame_index=3, center_x=50, center_y=50)],
+            }
+        ),
+        rule=make_rule(EventType.ENTER_ZONE),
+        zone=make_zone(),
+        event_cooldown_sec=1.0,
+    )
+
+    assert len(result.events) == 1
+    assert result.events[0].frame_index == 1
 
 
 def test_analyze_frames_does_not_reenter_known_track_after_missed_detection() -> None:
