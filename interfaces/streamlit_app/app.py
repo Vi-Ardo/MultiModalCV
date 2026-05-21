@@ -10,10 +10,10 @@ import pandas as pd
 import streamlit as st
 
 from multimodalcv.cli.analyze import AnalyzeResult, analyze_video
-from multimodalcv.commands.models import CommandRule
 from multimodalcv.commands.parser import (
+    CommandIntent,
     UnsupportedCommandError,
-    parse_command,
+    interpret_command,
     supported_command_examples,
 )
 from multimodalcv.config.zones import ZoneConfigError
@@ -128,21 +128,23 @@ def render_ready_state(filename: str) -> None:
     st.success(f"Ready to analyze: {filename}")
 
 
-def render_command_preview(command: str) -> CommandRule | None:
+def render_command_preview(command: str) -> CommandIntent | None:
     try:
-        rule = parse_command(command)
+        intent = interpret_command(command)
     except UnsupportedCommandError:
-        st.warning("Command is not supported yet.")
-        with st.expander("Supported examples"):
+        st.warning("Команда пока не поддерживается.")
+        with st.expander("Примеры поддерживаемых команд"):
             for example in supported_command_examples():
                 st.write(f"- {example}")
         return None
 
+    st.success(intent.summary)
     st.caption(
-        "Parsed as: "
-        f"`{rule.event_type.value}` / `{rule.object_class.value}` / zone `{rule.zone_name}`"
+        "Распознано как: "
+        f"`{intent.name}` / `{intent.rule.event_type.value}` / "
+        f"`{intent.rule.object_class.value}` / зона `{intent.rule.zone_name}`"
     )
-    return rule
+    return intent
 
 
 def render_video_metadata(metadata: VideoMetadata) -> None:

@@ -46,6 +46,5 @@ def test_main_returns_error_for_unsupported_command(capsys) -> None:
 
     captured = capsys.readouterr()
     assert exit_code == 2
-    assert "Unsupported command" in captured.out
+    assert "Команда пока не поддерживается" in captured.out
     assert "Supported commands" in captured.out
-

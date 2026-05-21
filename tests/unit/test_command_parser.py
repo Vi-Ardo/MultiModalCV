@@ -2,6 +2,7 @@ import pytest
 
 from multimodalcv.commands.parser import (
     UnsupportedCommandError,
+    interpret_command,
     normalize_command,
     parse_command,
     supported_command_examples,
@@ -49,6 +50,22 @@ def test_parser_accepts_custom_zone_name() -> None:
     assert rule.zone_name == "entrance"
 
 
+def test_interpret_command_returns_user_facing_intent() -> None:
+    intent = interpret_command("Сколько человек на видео")
+
+    assert intent.name == "count_people_in_frame"
+    assert intent.summary == "Буду считать людей во всем кадре."
+    assert intent.confidence == "deterministic"
+    assert intent.rule.event_type == EventType.COUNT_IN_FRAME
+
+
+def test_interpret_command_preserves_zone_name() -> None:
+    intent = interpret_command("Уведоми, если человек зайдет в комнату", zone_name="entrance")
+
+    assert intent.name == "person_enters_area"
+    assert intent.rule.zone_name == "entrance"
+
+
 def test_normalization_handles_case_punctuation_spaces_and_yo() -> None:
     normalized = normalize_command("  СООБЩИ,   когда человек ВОЙДЁТ в зону!!! ")
 
@@ -56,7 +73,7 @@ def test_normalization_handles_case_punctuation_spaces_and_yo() -> None:
 
 
 def test_parser_rejects_unsupported_command() -> None:
-    with pytest.raises(UnsupportedCommandError):
+    with pytest.raises(UnsupportedCommandError, match="Команда пока не поддерживается"):
         parse_command("Определи подозрительное поведение")
 
 

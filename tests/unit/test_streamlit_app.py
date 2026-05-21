@@ -5,8 +5,10 @@ from interfaces.streamlit_app.app import (
     find_frame_by_name,
     format_zone_rect,
     full_frame_zone_rect,
+    render_command_preview,
     zone_rect_values,
 )
+from multimodalcv.commands.parser import CommandIntent
 from multimodalcv.video.reader import VideoMetadata
 
 
@@ -44,3 +46,14 @@ def test_find_frame_by_name() -> None:
     ]
 
     assert find_frame_by_name(paths, "annotated_000002.jpg") == paths[1]
+
+
+def test_render_command_preview_returns_intent() -> None:
+    intent = render_command_preview("Посчитай людей в кадре")
+
+    assert isinstance(intent, CommandIntent)
+    assert intent.name == "count_people_in_frame"
+
+
+def test_render_command_preview_returns_none_for_unsupported_command() -> None:
+    assert render_command_preview("Найди подозрительное поведение") is None
