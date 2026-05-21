@@ -7,7 +7,7 @@ from dataclasses import dataclass
 from typing import Any, Protocol
 
 from multimodalcv.commands.models import CommandRule
-from multimodalcv.commands.parser import CommandIntent, UnsupportedCommandError
+from multimodalcv.commands.parser import CommandIntent, UnsupportedCommandError, normalize_command
 from multimodalcv.core.models import EventType, ObjectClass
 
 
@@ -85,6 +85,15 @@ class JSONLLMCommandInterpreter:
         return parse_llm_intent_response(response_text, raw_text=command, default_zone_name=zone_name)
 
 
+class MockLLMResponseProvider:
+    """Local stand-in for a future LLM API provider."""
+
+    def generate(self, command: str) -> str:
+        normalized = normalize_command(command)
+        payload = _mock_payload_for_command(normalized)
+        return json.dumps(payload)
+
+
 def parse_llm_intent_response(
     response_text: str,
     *,
@@ -153,3 +162,35 @@ def _parse_object_class(object_name: str) -> ObjectClass:
         return ObjectClass(object_name)
     except ValueError as error:
         raise UnsupportedCommandError(f"Модель вернула неподдерживаемый object: {object_name}") from error
+
+
+def _mock_payload_for_command(command: str) -> dict[str, str]:
+    if _contains_any(command, ("машин", "авто", "автомобил")) and _contains_any(
+        command,
+        ("след", "отслед", "наблюд", "смотри"),
+    ):
+        return {"intent": "track_car", "object": "car"}
+
+    if _contains_any(command, ("человек", "люд", "персон")):
+        if _contains_any(command, ("след", "отслед", "наблюд", "смотри")):
+            return {"intent": "track_person", "object": "person"}
+
+        if _contains_any(command, ("сколько", "посч", "количество")):
+            if _contains_any(command, ("зон", "комнат", "помещен", "област")):
+                return {"intent": "count_people_in_area", "object": "person"}
+            return {"intent": "count_people_in_frame", "object": "person"}
+
+        if _contains_any(command, ("вош", "вход", "зайд", "появ")):
+            return {"intent": "person_enters_area", "object": "person"}
+
+        if _contains_any(command, ("выш", "выход", "покин", "исчез")):
+            return {"intent": "person_leaves_area", "object": "person"}
+
+        if _contains_any(command, ("никого", "пуст", "остан")):
+            return {"intent": "area_becomes_empty", "object": "person"}
+
+    return {"intent": "unsupported", "object": "person"}
+
+
+def _contains_any(command: str, stems: tuple[str, ...]) -> bool:
+    return any(stem in command for stem in stems)

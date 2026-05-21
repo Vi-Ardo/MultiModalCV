@@ -4,6 +4,7 @@ from multimodalcv.commands.interpreter import FallbackCommandInterpreter
 from multimodalcv.commands.llm_interpreter import (
     ALLOWED_INTENTS,
     JSONLLMCommandInterpreter,
+    MockLLMResponseProvider,
     parse_llm_intent_response,
 )
 from multimodalcv.commands.parser import CommandIntent, UnsupportedCommandError
@@ -125,3 +126,29 @@ def test_json_llm_interpreter_can_be_used_as_fallback() -> None:
 
     assert intent.name == "track_person"
     assert intent.confidence == "llm_validated"
+
+
+def test_mock_llm_response_provider_returns_valid_tracking_intent() -> None:
+    interpreter = JSONLLMCommandInterpreter(MockLLMResponseProvider())
+
+    intent = interpreter.interpret("Понаблюдай за этим человеком")
+
+    assert intent.name == "track_person"
+    assert intent.rule.object_class == ObjectClass.PERSON
+    assert intent.confidence == "llm_validated"
+
+
+def test_mock_llm_response_provider_returns_valid_count_intent() -> None:
+    interpreter = JSONLLMCommandInterpreter(MockLLMResponseProvider())
+
+    intent = interpreter.interpret("Сколько людей видно сейчас?")
+
+    assert intent.name == "count_people_in_frame"
+    assert intent.rule.event_type == EventType.COUNT_IN_FRAME
+
+
+def test_mock_llm_response_provider_rejects_unknown_command() -> None:
+    interpreter = JSONLLMCommandInterpreter(MockLLMResponseProvider())
+
+    with pytest.raises(UnsupportedCommandError, match="неподдерживаемый intent"):
+        interpreter.interpret("Определи странное поведение")

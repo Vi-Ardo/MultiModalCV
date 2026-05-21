@@ -1,6 +1,7 @@
 from pathlib import Path
 
 from interfaces.streamlit_app.app import (
+    build_command_interpreter,
     center_zone_rect,
     find_frame_by_name,
     format_zone_rect,
@@ -57,3 +58,39 @@ def test_render_command_preview_returns_intent() -> None:
 
 def test_render_command_preview_returns_none_for_unsupported_command() -> None:
     assert render_command_preview("Найди подозрительное поведение") is None
+
+
+def test_build_command_interpreter_returns_deterministic_mode() -> None:
+    interpreter = build_command_interpreter("Deterministic")
+
+    intent = interpreter.interpret("Посчитай людей в кадре")
+
+    assert intent.name == "count_people_in_frame"
+    assert intent.confidence == "deterministic"
+
+
+def test_build_command_interpreter_returns_mock_llm_fallback_mode() -> None:
+    interpreter = build_command_interpreter("Deterministic + mock LLM fallback")
+
+    intent = interpreter.interpret("Понаблюдай за этим человеком")
+
+    assert intent.name == "track_person"
+    assert intent.confidence == "llm_validated"
+
+
+def test_build_command_interpreter_rejects_unknown_mode() -> None:
+    try:
+        build_command_interpreter("Unknown")
+    except ValueError as error:
+        assert "Unsupported command interpreter mode" in str(error)
+    else:
+        raise AssertionError("Expected ValueError")
+
+
+def test_render_command_preview_uses_supplied_interpreter() -> None:
+    interpreter = build_command_interpreter("Deterministic + mock LLM fallback")
+
+    intent = render_command_preview("Понаблюдай за этим человеком", interpreter)
+
+    assert isinstance(intent, CommandIntent)
+    assert intent.name == "track_person"

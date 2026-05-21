@@ -10,7 +10,12 @@ import pandas as pd
 import streamlit as st
 
 from multimodalcv.cli.analyze import AnalyzeResult, analyze_video
-from multimodalcv.commands.interpreter import default_command_interpreter
+from multimodalcv.commands.interpreter import (
+    CommandInterpreter,
+    DeterministicCommandInterpreter,
+    FallbackCommandInterpreter,
+)
+from multimodalcv.commands.llm_interpreter import JSONLLMCommandInterpreter, MockLLMResponseProvider
 from multimodalcv.commands.parser import (
     CommandIntent,
     UnsupportedCommandError,
@@ -25,6 +30,10 @@ from multimodalcv.video.reader import VideoMetadata, VideoOpenError, read_video_
 
 RUNS_DIR = Path("outputs/streamlit")
 DEFAULT_COMMAND = "Посчитай людей в кадре"
+INTERPRETER_MODES = (
+    "Deterministic",
+    "Deterministic + mock LLM fallback",
+)
 
 
 def main() -> None:
@@ -44,8 +53,10 @@ def main() -> None:
             except VideoOpenError as error:
                 st.error(str(error))
 
+        interpreter_mode = st.selectbox("Command interpreter", INTERPRETER_MODES, index=0)
+        command_interpreter = build_command_interpreter(interpreter_mode)
         command = st.text_input("Command", value=DEFAULT_COMMAND)
-        render_command_preview(command)
+        render_command_preview(command, command_interpreter)
         detector = st.selectbox("Detector", ["yolo", "fake"], index=0)
         model_path = st.text_input("YOLO model", value="yolov8n.pt")
         max_frame_limit = metadata.frame_count if metadata and metadata.frame_count > 0 else 5000
@@ -87,6 +98,7 @@ def main() -> None:
                     zone_rect=zone_rect,
                     count_window_size=int(count_window_size),
                     event_cooldown_sec=float(event_cooldown_sec),
+                    command_interpreter=command_interpreter,
                 )
             except (UnsupportedCommandError, VideoOpenError, ValueError, YOLODependencyError, ZoneConfigError) as error:
                 st.error(str(error))
@@ -128,9 +140,28 @@ def render_ready_state(filename: str) -> None:
     st.success(f"Ready to analyze: {filename}")
 
 
-def render_command_preview(command: str) -> CommandIntent | None:
+def build_command_interpreter(mode: str) -> CommandInterpreter:
+    if mode == "Deterministic":
+        return DeterministicCommandInterpreter()
+
+    if mode == "Deterministic + mock LLM fallback":
+        return FallbackCommandInterpreter(
+            (
+                DeterministicCommandInterpreter(),
+                JSONLLMCommandInterpreter(MockLLMResponseProvider()),
+            )
+        )
+
+    raise ValueError(f"Unsupported command interpreter mode: {mode}")
+
+
+def render_command_preview(
+    command: str,
+    command_interpreter: CommandInterpreter | None = None,
+) -> CommandIntent | None:
+    interpreter = command_interpreter or build_command_interpreter("Deterministic")
     try:
-        intent = default_command_interpreter().interpret(command)
+        intent = interpreter.interpret(command)
     except UnsupportedCommandError:
         st.warning("Команда пока не поддерживается.")
         with st.expander("Примеры поддерживаемых команд"):
@@ -142,7 +173,8 @@ def render_command_preview(command: str) -> CommandIntent | None:
     st.caption(
         "Распознано как: "
         f"`{intent.name}` / `{intent.rule.event_type.value}` / "
-        f"`{intent.rule.object_class.value}` / зона `{intent.rule.zone_name}`"
+        f"`{intent.rule.object_class.value}` / зона `{intent.rule.zone_name}` / "
+        f"`{intent.confidence}`"
     )
     return intent
 
