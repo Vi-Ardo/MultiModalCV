@@ -179,6 +179,7 @@ def render_results(result: AnalyzeResult, run_dir: Path) -> None:
     if not frame_paths:
         st.info("No annotated frames were saved for this run.")
     else:
+        render_frame_viewer(frame_paths)
         render_frame_gallery(frame_paths)
 
     with st.expander("Output files"):
@@ -200,7 +201,22 @@ def render_metrics(summary: dict) -> None:
         st.caption(f"Count distribution: {counts.get('count_distribution', {})}")
 
 
+def render_frame_viewer(frame_paths: list[Path]) -> None:
+    selected_name = st.selectbox(
+        "Annotated frame",
+        [frame_path.name for frame_path in frame_paths],
+        index=0,
+    )
+    selected_path = find_frame_by_name(frame_paths, selected_name)
+    st.image(str(selected_path), caption=selected_path.name, use_container_width=True)
+
+
+def find_frame_by_name(frame_paths: list[Path], frame_name: str) -> Path:
+    return next(frame_path for frame_path in frame_paths if frame_path.name == frame_name)
+
+
 def render_frame_gallery(frame_paths: list[Path]) -> None:
+    st.markdown("**Frame overview**")
     preview_count = min(12, len(frame_paths))
     columns = st.columns(3)
     for index, frame_path in enumerate(frame_paths[:preview_count]):

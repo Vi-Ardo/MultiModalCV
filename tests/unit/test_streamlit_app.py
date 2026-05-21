@@ -2,6 +2,7 @@ from pathlib import Path
 
 from interfaces.streamlit_app.app import (
     center_zone_rect,
+    find_frame_by_name,
     format_zone_rect,
     full_frame_zone_rect,
     zone_rect_values,
@@ -35,3 +36,11 @@ def test_format_zone_rect() -> None:
 def test_zone_rect_values() -> None:
     assert zone_rect_values("1,2,3,4") == (1, 2, 3, 4)
 
+
+def test_find_frame_by_name() -> None:
+    paths = [
+        Path("frames/annotated_000001.jpg"),
+        Path("frames/annotated_000002.jpg"),
+    ]
+
+    assert find_frame_by_name(paths, "annotated_000002.jpg") == paths[1]
