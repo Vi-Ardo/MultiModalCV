@@ -61,6 +61,12 @@ Install optional YOLO dependencies for real object detection:
 python -m pip install -e .[yolo]
 ```
 
+Install optional UI dependencies:
+
+```powershell
+python -m pip install -e .[ui]
+```
+
 If `python` is not available in PATH, use the Python executable installed on your machine.
 
 ## Run Tests
@@ -177,6 +183,20 @@ Events:
 ```
 
 Each analysis run also writes `summary.json` next to `events.json` by default. Use `--summary-output` to choose another path.
+
+## Run Streamlit Interface
+
+```powershell
+.venv\Scripts\streamlit.exe run interfaces\streamlit_app\app.py
+```
+
+Then open:
+
+```text
+http://localhost:8501
+```
+
+The interface supports video upload, command selection, YOLO/fake detector mode, zone rectangle settings, count smoothing, event cooldown, summary metrics, event tables, and annotated frame previews.
 
 The first YOLO run may download model weights such as `yolov8n.pt`. Model weights are intentionally ignored by git.
 

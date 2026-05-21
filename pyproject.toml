@@ -23,6 +23,10 @@ dev = [
 yolo = [
     "ultralytics>=8.0",
 ]
+ui = [
+    "pandas>=2.0",
+    "streamlit>=1.35",
+]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
