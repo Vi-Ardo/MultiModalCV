@@ -10,10 +10,10 @@ import pandas as pd
 import streamlit as st
 
 from multimodalcv.cli.analyze import AnalyzeResult, analyze_video
+from multimodalcv.commands.interpreter import default_command_interpreter
 from multimodalcv.commands.parser import (
     CommandIntent,
     UnsupportedCommandError,
-    interpret_command,
     supported_command_examples,
 )
 from multimodalcv.config.zones import ZoneConfigError
@@ -130,7 +130,7 @@ def render_ready_state(filename: str) -> None:
 
 def render_command_preview(command: str) -> CommandIntent | None:
     try:
-        intent = interpret_command(command)
+        intent = default_command_interpreter().interpret(command)
     except UnsupportedCommandError:
         st.warning("Команда пока не поддерживается.")
         with st.expander("Примеры поддерживаемых команд"):

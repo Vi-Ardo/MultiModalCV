@@ -3,7 +3,8 @@
 import argparse
 from pathlib import Path
 
-from multimodalcv.commands.parser import UnsupportedCommandError, parse_command, supported_commands
+from multimodalcv.commands.interpreter import CommandInterpreter, default_command_interpreter
+from multimodalcv.commands.parser import UnsupportedCommandError, supported_commands
 from multimodalcv.config.zones import ZoneConfigError, default_zone, parse_zone_rect
 from multimodalcv.core.models import BoundingBox, Detection, Event, EventType, ObjectClass, Track, Zone
 from multimodalcv.detection.base import ObjectDetector
@@ -181,12 +182,15 @@ def analyze_video(
     zone_rect: str | None = None,
     count_window_size: int = 1,
     event_cooldown_sec: float = 0.0,
+    command_interpreter: CommandInterpreter | None = None,
 ) -> AnalyzeResult:
     """Analyze a video using the selected detector/tracker scenario."""
     if max_frames < 1:
         raise ValueError("max_frames must be >= 1")
 
-    rule = parse_command(command)
+    interpreter = command_interpreter or default_command_interpreter()
+    intent = interpreter.interpret(command)
+    rule = intent.rule
     frames = list(iter_video_frames(video_path, max_frames=max_frames))
     detector, tracker = make_components(
         frames=frames,

@@ -3,7 +3,8 @@
 import argparse
 from pathlib import Path
 
-from multimodalcv.commands.parser import UnsupportedCommandError, parse_command, supported_commands
+from multimodalcv.commands.interpreter import CommandInterpreter, default_command_interpreter
+from multimodalcv.commands.parser import UnsupportedCommandError, supported_commands
 from multimodalcv.core.models import BoundingBox, Event, EventType, ObjectClass, Track, Zone
 from multimodalcv.reporting.json_report import write_events_json
 from multimodalcv.rules.engine import evaluate_rule
@@ -43,8 +44,14 @@ def build_parser() -> argparse.ArgumentParser:
     return parser
 
 
-def run_demo(*, command: str, output_path: Path) -> list[Event]:
-    rule = parse_command(command)
+def run_demo(
+    *,
+    command: str,
+    output_path: Path,
+    command_interpreter: CommandInterpreter | None = None,
+) -> list[Event]:
+    interpreter = command_interpreter or default_command_interpreter()
+    rule = interpreter.interpret(command).rule
     zone = make_demo_zone(rule.zone_name)
     previous_tracks, current_tracks = make_demo_scene(rule.event_type, rule.object_class)
 
@@ -120,4 +127,3 @@ def make_track(
 
 if __name__ == "__main__":
     raise SystemExit(main())
-
