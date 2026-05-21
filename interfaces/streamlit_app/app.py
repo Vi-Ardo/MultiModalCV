@@ -15,7 +15,7 @@ from multimodalcv.config.zones import ZoneConfigError
 from multimodalcv.core.models import Event
 from multimodalcv.detection.yolo import YOLODependencyError
 from multimodalcv.reporting.json_report import event_to_dict
-from multimodalcv.video.reader import VideoOpenError
+from multimodalcv.video.reader import VideoMetadata, VideoOpenError, read_video_metadata
 
 
 RUNS_DIR = Path("outputs/streamlit")
@@ -30,11 +30,27 @@ def main() -> None:
 
     with st.sidebar:
         uploaded_file = st.file_uploader("Video file", type=["mp4", "avi", "mov", "mkv"])
+        metadata = None
+        if uploaded_file:
+            preview_video_path = save_uploaded_video(uploaded_file, RUNS_DIR / "_preview")
+            try:
+                metadata = read_video_metadata(preview_video_path)
+                render_video_metadata(metadata)
+            except VideoOpenError as error:
+                st.error(str(error))
+
         command = st.selectbox("Command", supported_commands(), index=_default_command_index())
         detector = st.selectbox("Detector", ["yolo", "fake"], index=0)
         model_path = st.text_input("YOLO model", value="yolov8n.pt")
-        max_frames = st.number_input("Max frames", min_value=1, max_value=5000, value=100, step=10)
-        zone_rect = st.text_input("Zone rectangle", value="0,0,320,240")
+        max_frame_limit = metadata.frame_count if metadata and metadata.frame_count > 0 else 5000
+        max_frames = st.number_input(
+            "Max frames",
+            min_value=1,
+            max_value=max_frame_limit,
+            value=min(100, max_frame_limit),
+            step=10,
+        )
+        zone_rect = render_zone_controls(metadata)
         confidence = st.slider("Confidence", min_value=0.05, max_value=0.95, value=0.25, step=0.05)
         count_window_size = st.number_input("Count smoothing window", min_value=1, max_value=31, value=5, step=2)
         event_cooldown_sec = st.number_input("Event cooldown, sec", min_value=0.0, max_value=30.0, value=2.0, step=0.5)
@@ -106,6 +122,47 @@ def render_ready_state(filename: str) -> None:
     st.success(f"Ready to analyze: {filename}")
 
 
+def render_video_metadata(metadata: VideoMetadata) -> None:
+    st.caption(
+        f"Video: {metadata.width}x{metadata.height}, "
+        f"{metadata.frame_count} frames, {metadata.fps:.2f} FPS, "
+        f"{metadata.duration_sec:.2f} sec"
+    )
+
+
+def render_zone_controls(metadata: VideoMetadata | None) -> str:
+    st.markdown("**Zone**")
+
+    if metadata is None:
+        st.caption("Upload a video to configure the zone by frame size.")
+        return st.text_input("Zone rectangle", value="0,0,320,240")
+
+    zone_mode = st.selectbox("Zone mode", ["Full frame", "Center 50%", "Custom"], index=0)
+
+    if zone_mode == "Full frame":
+        zone_rect = full_frame_zone_rect(metadata)
+        st.caption(f"Using full frame: `{zone_rect}`")
+        return zone_rect
+
+    if zone_mode == "Center 50%":
+        zone_rect = center_zone_rect(metadata)
+        st.caption(f"Using center region: `{zone_rect}`")
+        return zone_rect
+
+    x1_default, y1_default, x2_default, y2_default = zone_rect_values(center_zone_rect(metadata))
+    left, right = st.columns(2)
+    with left:
+        x1 = st.number_input("Zone x1", min_value=0, max_value=metadata.width - 1, value=x1_default)
+        y1 = st.number_input("Zone y1", min_value=0, max_value=metadata.height - 1, value=y1_default)
+    with right:
+        x2 = st.number_input("Zone x2", min_value=1, max_value=metadata.width, value=x2_default)
+        y2 = st.number_input("Zone y2", min_value=1, max_value=metadata.height, value=y2_default)
+
+    zone_rect = format_zone_rect(x1, y1, x2, y2)
+    st.caption(f"Custom zone: `{zone_rect}`")
+    return zone_rect
+
+
 def render_results(result: AnalyzeResult, run_dir: Path) -> None:
     summary = load_summary(result.summary_path)
     render_metrics(summary)
@@ -160,6 +217,32 @@ def save_uploaded_video(uploaded_file, run_dir: Path) -> Path:
     video_path = run_dir / f"input{suffix}"
     video_path.write_bytes(uploaded_file.getbuffer())
     return video_path
+
+
+def full_frame_zone_rect(metadata: VideoMetadata) -> str:
+    return format_zone_rect(0, 0, metadata.width, metadata.height)
+
+
+def center_zone_rect(metadata: VideoMetadata) -> str:
+    x_margin = metadata.width // 4
+    y_margin = metadata.height // 4
+    return format_zone_rect(
+        x_margin,
+        y_margin,
+        metadata.width - x_margin,
+        metadata.height - y_margin,
+    )
+
+
+def format_zone_rect(x1: int, y1: int, x2: int, y2: int) -> str:
+    return f"{x1},{y1},{x2},{y2}"
+
+
+def zone_rect_values(zone_rect: str) -> tuple[int, int, int, int]:
+    values = tuple(int(float(part)) for part in zone_rect.split(","))
+    if len(values) != 4:
+        raise ValueError("zone rectangle must contain four values")
+    return values
 
 
 def load_summary(summary_path: Path) -> dict:

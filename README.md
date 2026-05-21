@@ -198,6 +198,12 @@ http://localhost:8501
 
 The interface supports video upload, command selection, YOLO/fake detector mode, zone rectangle settings, count smoothing, event cooldown, summary metrics, event tables, and annotated frame previews.
 
+After upload, the interface reads video metadata and configures zones using the actual frame size. Zone modes:
+
+- `Full frame`;
+- `Center 50%`;
+- `Custom` with bounded coordinate inputs.
+
 The first YOLO run may download model weights such as `yolov8n.pt`. Model weights are intentionally ignored by git.
 
 ## Project Layout
