@@ -5,6 +5,8 @@ from multimodalcv.commands.llm_interpreter import (
     ALLOWED_INTENTS,
     JSONLLMCommandInterpreter,
     MockLLMResponseProvider,
+    OllamaResponseProvider,
+    build_ollama_prompt,
     parse_llm_intent_response,
 )
 from multimodalcv.commands.parser import CommandIntent, UnsupportedCommandError
@@ -18,6 +20,16 @@ class StaticResponseProvider:
 
     def generate(self, command: str) -> str:
         self.calls.append(command)
+        return self.response
+
+
+class CapturingOllamaTransport:
+    def __init__(self, response: dict) -> None:
+        self.response = response
+        self.calls: list[tuple[str, dict, float]] = []
+
+    def __call__(self, url: str, payload: dict, timeout_sec: float) -> dict:
+        self.calls.append((url, payload, timeout_sec))
         return self.response
 
 
@@ -152,3 +164,56 @@ def test_mock_llm_response_provider_rejects_unknown_command() -> None:
 
     with pytest.raises(UnsupportedCommandError, match="неподдерживаемый intent"):
         interpreter.interpret("Определи странное поведение")
+
+
+def test_build_ollama_prompt_contains_command_and_allowed_intents() -> None:
+    prompt = build_ollama_prompt("Понаблюдай за человеком")
+
+    assert "Понаблюдай за человеком" in prompt
+    assert "track_person" in prompt
+    assert "count_people_in_frame" in prompt
+
+
+def test_ollama_response_provider_posts_structured_request() -> None:
+    transport = CapturingOllamaTransport(
+        {"response": '{"intent": "track_person", "object": "person"}'}
+    )
+    provider = OllamaResponseProvider(
+        model="qwen2.5:3b",
+        base_url="http://localhost:11434/",
+        timeout_sec=7,
+        transport=transport,
+    )
+
+    response_text = provider.generate("Понаблюдай за человеком")
+
+    assert response_text == '{"intent": "track_person", "object": "person"}'
+    assert len(transport.calls) == 1
+    url, payload, timeout_sec = transport.calls[0]
+    assert url == "http://localhost:11434/api/generate"
+    assert payload["model"] == "qwen2.5:3b"
+    assert payload["stream"] is False
+    assert payload["options"]["temperature"] == 0
+    assert payload["format"]["properties"]["intent"]["enum"]
+    assert timeout_sec == 7
+
+
+def test_ollama_response_provider_rejects_empty_response() -> None:
+    provider = OllamaResponseProvider(transport=CapturingOllamaTransport({"response": ""}))
+
+    with pytest.raises(UnsupportedCommandError, match="Ollama вернула пустой"):
+        provider.generate("Понаблюдай за человеком")
+
+
+def test_ollama_response_provider_can_drive_json_interpreter() -> None:
+    provider = OllamaResponseProvider(
+        transport=CapturingOllamaTransport(
+            {"response": '{"intent": "count_people_in_frame", "object": "person"}'}
+        )
+    )
+    interpreter = JSONLLMCommandInterpreter(provider)
+
+    intent = interpreter.interpret("Сколько людей видно?")
+
+    assert intent.name == "count_people_in_frame"
+    assert intent.confidence == "llm_validated"

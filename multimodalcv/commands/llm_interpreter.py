@@ -5,6 +5,8 @@ from __future__ import annotations
 import json
 from dataclasses import dataclass
 from typing import Any, Protocol
+from urllib.error import URLError
+from urllib.request import Request, urlopen
 
 from multimodalcv.commands.models import CommandRule
 from multimodalcv.commands.parser import CommandIntent, UnsupportedCommandError, normalize_command
@@ -16,6 +18,13 @@ class LLMResponseProvider(Protocol):
 
     def generate(self, command: str) -> str:
         """Return a JSON object encoded as text."""
+
+
+class OllamaTransport(Protocol):
+    """HTTP transport used by the Ollama response provider."""
+
+    def __call__(self, url: str, payload: dict[str, Any], timeout_sec: float) -> dict[str, Any]:
+        """Post JSON to Ollama and return a decoded JSON response."""
 
 
 @dataclass(frozen=True)
@@ -73,6 +82,25 @@ ALLOWED_INTENTS: dict[str, AllowedIntent] = {
     ),
 }
 
+_OLLAMA_INTENT_SCHEMA: dict[str, Any] = {
+    "type": "object",
+    "properties": {
+        "intent": {
+            "type": "string",
+            "enum": sorted(ALLOWED_INTENTS),
+        },
+        "object": {
+            "type": "string",
+            "enum": [ObjectClass.PERSON.value, ObjectClass.CAR.value],
+        },
+        "zone": {
+            "type": "string",
+        },
+    },
+    "required": ["intent", "object"],
+    "additionalProperties": False,
+}
+
 
 class JSONLLMCommandInterpreter:
     """Interpreter that validates a JSON intent response from a model backend."""
@@ -92,6 +120,56 @@ class MockLLMResponseProvider:
         normalized = normalize_command(command)
         payload = _mock_payload_for_command(normalized)
         return json.dumps(payload)
+
+
+class OllamaResponseProvider:
+    """Response provider backed by a local Ollama server."""
+
+    def __init__(
+        self,
+        *,
+        model: str = "qwen2.5:3b",
+        base_url: str = "http://localhost:11434",
+        timeout_sec: float = 30.0,
+        transport: OllamaTransport | None = None,
+    ) -> None:
+        self.model = model
+        self.base_url = base_url.rstrip("/")
+        self.timeout_sec = timeout_sec
+        self._transport = transport or _post_json
+
+    def generate(self, command: str) -> str:
+        payload = {
+            "model": self.model,
+            "prompt": build_ollama_prompt(command),
+            "stream": False,
+            "format": _OLLAMA_INTENT_SCHEMA,
+            "options": {
+                "temperature": 0,
+            },
+        }
+        response = self._transport(f"{self.base_url}/api/generate", payload, self.timeout_sec)
+        response_text = response.get("response")
+        if not isinstance(response_text, str) or not response_text.strip():
+            raise UnsupportedCommandError("Ollama вернула пустой или некорректный ответ")
+
+        return response_text.strip()
+
+
+def build_ollama_prompt(command: str) -> str:
+    """Build a constrained prompt for local command interpretation."""
+    return (
+        "Ты интерпретируешь русскую команду для системы видеоаналитики. "
+        "Верни только JSON без пояснений. "
+        "Разрешенные intent: "
+        f"{', '.join(sorted(ALLOWED_INTENTS))}. "
+        "Разрешенные object: person, car. "
+        "Если команда про людей в кадре, используй object=person. "
+        "Если команда про машину или автомобиль, используй object=car. "
+        "Если команда не соответствует разрешенным сценариям, верни "
+        '{"intent":"unsupported","object":"person"}. '
+        f"Команда: {command}"
+    )
 
 
 def parse_llm_intent_response(
@@ -162,6 +240,33 @@ def _parse_object_class(object_name: str) -> ObjectClass:
         return ObjectClass(object_name)
     except ValueError as error:
         raise UnsupportedCommandError(f"Модель вернула неподдерживаемый object: {object_name}") from error
+
+
+def _post_json(url: str, payload: dict[str, Any], timeout_sec: float) -> dict[str, Any]:
+    request = Request(
+        url,
+        data=json.dumps(payload).encode("utf-8"),
+        headers={"Content-Type": "application/json"},
+        method="POST",
+    )
+    try:
+        with urlopen(request, timeout=timeout_sec) as response:
+            body = response.read().decode("utf-8")
+    except (OSError, TimeoutError, URLError) as error:
+        raise UnsupportedCommandError(
+            "Не удалось обратиться к Ollama. Проверь, что приложение Ollama запущено "
+            "и модель скачана."
+        ) from error
+
+    try:
+        decoded = json.loads(body)
+    except json.JSONDecodeError as error:
+        raise UnsupportedCommandError("Ollama вернула некорректный JSON-ответ API") from error
+
+    if not isinstance(decoded, dict):
+        raise UnsupportedCommandError("Ollama API вернула ответ не в формате JSON-объекта")
+
+    return decoded
 
 
 def _mock_payload_for_command(command: str) -> dict[str, str]:

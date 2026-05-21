@@ -78,6 +78,15 @@ def test_build_command_interpreter_returns_mock_llm_fallback_mode() -> None:
     assert intent.confidence == "llm_validated"
 
 
+def test_build_command_interpreter_returns_ollama_fallback_mode() -> None:
+    interpreter = build_command_interpreter("Deterministic + Ollama fallback", ollama_model="qwen2.5:3b")
+
+    intent = interpreter.interpret("Следи за человеком")
+
+    assert intent.name == "track_person"
+    assert intent.confidence == "deterministic"
+
+
 def test_build_command_interpreter_rejects_unknown_mode() -> None:
     try:
         build_command_interpreter("Unknown")

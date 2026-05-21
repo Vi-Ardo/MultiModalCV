@@ -16,6 +16,7 @@ from multimodalcv.commands.interpreter import (
     FallbackCommandInterpreter,
 )
 from multimodalcv.commands.llm_interpreter import JSONLLMCommandInterpreter, MockLLMResponseProvider
+from multimodalcv.commands.llm_interpreter import OllamaResponseProvider
 from multimodalcv.commands.parser import (
     CommandIntent,
     UnsupportedCommandError,
@@ -33,7 +34,9 @@ DEFAULT_COMMAND = "Посчитай людей в кадре"
 INTERPRETER_MODES = (
     "Deterministic",
     "Deterministic + mock LLM fallback",
+    "Deterministic + Ollama fallback",
 )
+DEFAULT_OLLAMA_MODEL = "qwen2.5:3b"
 
 
 def main() -> None:
@@ -54,7 +57,10 @@ def main() -> None:
                 st.error(str(error))
 
         interpreter_mode = st.selectbox("Command interpreter", INTERPRETER_MODES, index=0)
-        command_interpreter = build_command_interpreter(interpreter_mode)
+        ollama_model = DEFAULT_OLLAMA_MODEL
+        if interpreter_mode == "Deterministic + Ollama fallback":
+            ollama_model = st.text_input("Ollama model", value=DEFAULT_OLLAMA_MODEL)
+        command_interpreter = build_command_interpreter(interpreter_mode, ollama_model=ollama_model)
         command = st.text_input("Command", value=DEFAULT_COMMAND)
         render_command_preview(command, command_interpreter)
         detector = st.selectbox("Detector", ["yolo", "fake"], index=0)
@@ -140,7 +146,11 @@ def render_ready_state(filename: str) -> None:
     st.success(f"Ready to analyze: {filename}")
 
 
-def build_command_interpreter(mode: str) -> CommandInterpreter:
+def build_command_interpreter(
+    mode: str,
+    *,
+    ollama_model: str = DEFAULT_OLLAMA_MODEL,
+) -> CommandInterpreter:
     if mode == "Deterministic":
         return DeterministicCommandInterpreter()
 
@@ -149,6 +159,14 @@ def build_command_interpreter(mode: str) -> CommandInterpreter:
             (
                 DeterministicCommandInterpreter(),
                 JSONLLMCommandInterpreter(MockLLMResponseProvider()),
+            )
+        )
+
+    if mode == "Deterministic + Ollama fallback":
+        return FallbackCommandInterpreter(
+            (
+                DeterministicCommandInterpreter(),
+                JSONLLMCommandInterpreter(OllamaResponseProvider(model=ollama_model)),
             )
         )
 
