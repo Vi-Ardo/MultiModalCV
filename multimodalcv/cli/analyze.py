@@ -12,6 +12,11 @@ from multimodalcv.detection.yolo import YOLODependencyError, YOLODetector
 from multimodalcv.pipeline.analysis import FrameAnalysis, analyze_frames
 from multimodalcv.reporting.annotate import write_annotated_frames
 from multimodalcv.reporting.json_report import write_events_json
+from multimodalcv.reporting.summary_report import (
+    build_analysis_summary,
+    default_summary_path,
+    write_analysis_summary_json,
+)
 from multimodalcv.tracking.base import ObjectTracker
 from multimodalcv.tracking.fake import FakeTracker
 from multimodalcv.tracking.iou import IoUTracker
@@ -28,6 +33,7 @@ class AnalyzeResult:
         processed_frames: int,
         detector_name: str,
         output_path: Path,
+        summary_path: Path,
         annotated_frame_count: int = 0,
         frames_dir: Path | None = None,
     ) -> None:
@@ -35,6 +41,7 @@ class AnalyzeResult:
         self.processed_frames = processed_frames
         self.detector_name = detector_name
         self.output_path = output_path
+        self.summary_path = summary_path
         self.annotated_frame_count = annotated_frame_count
         self.frames_dir = frames_dir
 
@@ -48,6 +55,7 @@ def main(argv: list[str] | None = None) -> int:
             video_path=args.video,
             command=args.command,
             output_path=args.output,
+            summary_output_path=args.summary_output,
             max_frames=args.max_frames,
             detector_name=args.detector,
             model_path=args.model,
@@ -91,6 +99,11 @@ def build_parser() -> argparse.ArgumentParser:
         type=Path,
         default=Path("outputs/analyze/events.json"),
         help="Path to the JSON event report.",
+    )
+    parser.add_argument(
+        "--summary-output",
+        type=Path,
+        help="Path to the JSON summary report. Defaults to summary.json next to the event report.",
     )
     parser.add_argument(
         "--max-frames",
@@ -157,6 +170,7 @@ def analyze_video(
     video_path: Path,
     command: str,
     output_path: Path,
+    summary_output_path: Path | None = None,
     max_frames: int = 2,
     detector_name: str = "fake",
     model_path: Path = Path("yolov8n.pt"),
@@ -193,19 +207,28 @@ def analyze_video(
         count_window_size=count_window_size,
         event_cooldown_sec=event_cooldown_sec,
     )
-    write_events_json(result.events, output_path)
-
     if save_frames:
         analyses_to_write = select_frames_for_output(result.frames, frame_mode)
         frame_paths = write_annotated_frames(analyses_to_write, frames_dir, zone=zone)
     else:
         frame_paths = []
 
+    write_events_json(result.events, output_path)
+    summary_path = summary_output_path or default_summary_path(output_path)
+    summary = build_analysis_summary(
+        events=result.events,
+        processed_frames=len(result.frames),
+        detector_name=detector_name,
+        annotated_frame_count=len(frame_paths),
+    )
+    write_analysis_summary_json(summary, summary_path)
+
     return AnalyzeResult(
         events=result.events,
         processed_frames=len(result.frames),
         detector_name=detector_name,
         output_path=output_path,
+        summary_path=summary_path,
         annotated_frame_count=len(frame_paths),
         frames_dir=frames_dir if save_frames else None,
     )
@@ -215,6 +238,7 @@ def print_analysis_summary(result: AnalyzeResult) -> None:
     print(f"Processed frame(s): {result.processed_frames}")
     print(f"Detector: {result.detector_name}")
     print(f"Wrote {len(result.events)} event(s) to {result.output_path}")
+    print(f"Wrote summary to {result.summary_path}")
 
     if result.frames_dir is not None:
         print(f"Saved {result.annotated_frame_count} annotated frame(s) to {result.frames_dir}")

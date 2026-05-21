@@ -46,10 +46,14 @@ def test_analyze_video_writes_enter_event_json(tmp_path) -> None:
     assert result.events[0].event_type == EventType.ENTER_ZONE
     assert result.processed_frames == 2
     assert result.detector_name == "fake"
+    assert result.summary_path == tmp_path / "summary.json"
 
     data = json.loads(output_path.read_text(encoding="utf-8"))
     assert data[0]["event_type"] == "enter_zone"
     assert data[0]["object_class"] == "person"
+    summary = json.loads(result.summary_path.read_text(encoding="utf-8"))
+    assert summary["event_count"] == 1
+    assert summary["processed_frames"] == 2
 
 
 def test_analyze_video_uses_custom_zone_rect(tmp_path) -> None:
@@ -132,9 +136,32 @@ def test_analyze_main_returns_zero_for_supported_command(tmp_path, capsys) -> No
     assert "Processed frame(s): 2" in captured.out
     assert "Detector: fake" in captured.out
     assert "Wrote 2 event(s)" in captured.out
+    assert "Wrote summary to" in captured.out
     assert "Events:" in captured.out
     assert "count_in_zone person zone=main count=1" in captured.out
     assert output_path.exists()
+    assert (tmp_path / "summary.json").exists()
+
+
+def test_analyze_main_accepts_custom_summary_output(tmp_path, capsys) -> None:
+    video_path = tmp_path / "sample.mp4"
+    output_path = tmp_path / "events.json"
+    summary_path = tmp_path / "custom" / "summary.json"
+    write_sample_video(video_path)
+
+    exit_code = main(
+        [
+            str(video_path),
+            "Посчитай людей в кадре",
+            "--output",
+            str(output_path),
+            "--summary-output",
+            str(summary_path),
+        ]
+    )
+
+    assert exit_code == 0
+    assert summary_path.exists()
 
 
 def test_analyze_main_can_save_annotated_frames(tmp_path, capsys) -> None:
