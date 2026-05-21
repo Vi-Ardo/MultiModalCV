@@ -4,59 +4,43 @@ from multimodalcv.commands.parser import (
     UnsupportedCommandError,
     normalize_command,
     parse_command,
+    supported_command_examples,
     supported_commands,
 )
 from multimodalcv.core.models import EventType, ObjectClass
 
 
-def test_parses_person_enter_zone_command() -> None:
-    rule = parse_command("Сообщи, когда человек войдет в зону")
+@pytest.mark.parametrize(
+    ("command", "event_type", "object_class"),
+    [
+        ("Сообщи, когда человек войдет в зону", EventType.ENTER_ZONE, ObjectClass.PERSON),
+        ("Уведоми, если человек зайдет в комнату", EventType.ENTER_ZONE, ObjectClass.PERSON),
+        ("Предупреди, когда человек появится в кадре", EventType.ENTER_ZONE, ObjectClass.PERSON),
+        ("Сообщи, когда человек выйдет из зоны", EventType.LEAVE_ZONE, ObjectClass.PERSON),
+        ("Уведоми, если человек покинет помещение", EventType.LEAVE_ZONE, ObjectClass.PERSON),
+        ("Сообщи, когда все люди покинут зону", EventType.EMPTY_ZONE, ObjectClass.PERSON),
+        ("Скажи, когда в комнате не останется людей", EventType.EMPTY_ZONE, ObjectClass.PERSON),
+        ("Посчитай людей в зоне", EventType.COUNT_IN_ZONE, ObjectClass.PERSON),
+        ("Сколько человек в комнате", EventType.COUNT_IN_ZONE, ObjectClass.PERSON),
+        ("Посчитай людей в кадре", EventType.COUNT_IN_FRAME, ObjectClass.PERSON),
+        ("Сколько человек на видео", EventType.COUNT_IN_FRAME, ObjectClass.PERSON),
+        ("Посчитай людей", EventType.COUNT_IN_FRAME, ObjectClass.PERSON),
+        ("Следи за человеком", EventType.TRACK_OBJECT, ObjectClass.PERSON),
+        ("Отслеживай человека", EventType.TRACK_OBJECT, ObjectClass.PERSON),
+        ("Следи за машиной", EventType.TRACK_OBJECT, ObjectClass.CAR),
+        ("Наблюдай за авто", EventType.TRACK_OBJECT, ObjectClass.CAR),
+    ],
+)
+def test_parses_supported_command_variations(
+    command: str,
+    event_type: EventType,
+    object_class: ObjectClass,
+) -> None:
+    rule = parse_command(command)
 
-    assert rule.event_type == EventType.ENTER_ZONE
-    assert rule.object_class == ObjectClass.PERSON
+    assert rule.event_type == event_type
+    assert rule.object_class == object_class
     assert rule.zone_name == "main"
-
-
-def test_parses_person_leave_zone_command() -> None:
-    rule = parse_command("Сообщи, когда человек выйдет из зоны")
-
-    assert rule.event_type == EventType.LEAVE_ZONE
-    assert rule.object_class == ObjectClass.PERSON
-
-
-def test_parses_empty_zone_command() -> None:
-    rule = parse_command("Сообщи, когда все люди покинут зону")
-
-    assert rule.event_type == EventType.EMPTY_ZONE
-    assert rule.object_class == ObjectClass.PERSON
-
-
-def test_parses_count_people_command() -> None:
-    rule = parse_command("Посчитай людей в зоне")
-
-    assert rule.event_type == EventType.COUNT_IN_ZONE
-    assert rule.object_class == ObjectClass.PERSON
-
-
-def test_parses_count_people_in_frame_command() -> None:
-    rule = parse_command("Посчитай людей в кадре")
-
-    assert rule.event_type == EventType.COUNT_IN_FRAME
-    assert rule.object_class == ObjectClass.PERSON
-
-
-def test_parses_track_person_command() -> None:
-    rule = parse_command("Следи за человеком")
-
-    assert rule.event_type == EventType.TRACK_OBJECT
-    assert rule.object_class == ObjectClass.PERSON
-
-
-def test_parses_track_car_command() -> None:
-    rule = parse_command("Следи за машиной")
-
-    assert rule.event_type == EventType.TRACK_OBJECT
-    assert rule.object_class == ObjectClass.CAR
 
 
 def test_parser_accepts_custom_zone_name() -> None:
@@ -76,8 +60,21 @@ def test_parser_rejects_unsupported_command() -> None:
         parse_command("Определи подозрительное поведение")
 
 
-def test_supported_commands_returns_examples() -> None:
+def test_count_in_zone_takes_priority_over_count_in_frame() -> None:
+    rule = parse_command("Сколько людей в зоне")
+
+    assert rule.event_type == EventType.COUNT_IN_ZONE
+
+
+def test_supported_commands_returns_canonical_examples() -> None:
     commands = supported_commands()
 
-    assert "сообщи когда человек войдет в зону" in commands
-    assert "следи за машиной" in commands
+    assert "Сообщи, когда человек войдет в зону" in commands
+    assert "Следи за машиной" in commands
+
+
+def test_supported_command_examples_returns_variations() -> None:
+    examples = supported_command_examples()
+
+    assert "Уведоми, если человек зайдет в комнату" in examples
+    assert "Наблюдай за авто" in examples

@@ -10,7 +10,12 @@ import pandas as pd
 import streamlit as st
 
 from multimodalcv.cli.analyze import AnalyzeResult, analyze_video
-from multimodalcv.commands.parser import UnsupportedCommandError, supported_commands
+from multimodalcv.commands.models import CommandRule
+from multimodalcv.commands.parser import (
+    UnsupportedCommandError,
+    parse_command,
+    supported_command_examples,
+)
 from multimodalcv.config.zones import ZoneConfigError
 from multimodalcv.core.models import Event
 from multimodalcv.detection.yolo import YOLODependencyError
@@ -39,7 +44,8 @@ def main() -> None:
             except VideoOpenError as error:
                 st.error(str(error))
 
-        command = st.selectbox("Command", supported_commands(), index=_default_command_index())
+        command = st.text_input("Command", value=DEFAULT_COMMAND)
+        render_command_preview(command)
         detector = st.selectbox("Detector", ["yolo", "fake"], index=0)
         model_path = st.text_input("YOLO model", value="yolov8n.pt")
         max_frame_limit = metadata.frame_count if metadata and metadata.frame_count > 0 else 5000
@@ -120,6 +126,23 @@ def render_empty_state() -> None:
 
 def render_ready_state(filename: str) -> None:
     st.success(f"Ready to analyze: {filename}")
+
+
+def render_command_preview(command: str) -> CommandRule | None:
+    try:
+        rule = parse_command(command)
+    except UnsupportedCommandError:
+        st.warning("Command is not supported yet.")
+        with st.expander("Supported examples"):
+            for example in supported_command_examples():
+                st.write(f"- {example}")
+        return None
+
+    st.caption(
+        "Parsed as: "
+        f"`{rule.event_type.value}` / `{rule.object_class.value}` / zone `{rule.zone_name}`"
+    )
+    return rule
 
 
 def render_video_metadata(metadata: VideoMetadata) -> None:
@@ -278,13 +301,6 @@ def events_to_dataframe(events: list[Event]) -> pd.DataFrame:
             row[f"metadata.{key}"] = value
 
     return pd.DataFrame(rows)
-
-
-def _default_command_index() -> int:
-    commands = supported_commands()
-    if DEFAULT_COMMAND in commands:
-        return commands.index(DEFAULT_COMMAND)
-    return 0
 
 
 if __name__ == "__main__":
