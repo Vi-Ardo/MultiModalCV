@@ -180,8 +180,8 @@ def render_command_preview(
     interpreter = command_interpreter or build_command_interpreter("Deterministic")
     try:
         intent = interpreter.interpret(command)
-    except UnsupportedCommandError:
-        st.warning("Команда пока не поддерживается.")
+    except UnsupportedCommandError as error:
+        st.warning(str(error))
         with st.expander("Примеры поддерживаемых команд"):
             for example in supported_command_examples():
                 st.write(f"- {example}")
