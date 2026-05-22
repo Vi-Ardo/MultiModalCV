@@ -31,6 +31,7 @@ from multimodalcv.video.reader import VideoMetadata, VideoOpenError, read_video_
 
 RUNS_DIR = Path("outputs/streamlit")
 DEFAULT_COMMAND = "Посчитай людей в кадре"
+DEFAULT_CONFIDENCE = 0.45
 INTERPRETER_MODES = (
     "Deterministic",
     "Deterministic + mock LLM fallback",
@@ -74,7 +75,13 @@ def main() -> None:
             step=10,
         )
         zone_rect = render_zone_controls(metadata)
-        confidence = st.slider("Confidence", min_value=0.05, max_value=0.95, value=0.25, step=0.05)
+        confidence = st.slider(
+            "Confidence",
+            min_value=0.05,
+            max_value=0.95,
+            value=DEFAULT_CONFIDENCE,
+            step=0.05,
+        )
         count_window_size = st.number_input("Count smoothing window", min_value=1, max_value=31, value=5, step=2)
         event_cooldown_sec = st.number_input("Event cooldown, sec", min_value=0.0, max_value=30.0, value=2.0, step=0.5)
         frame_mode = st.selectbox("Annotated frames", ["events", "all"], index=0)

@@ -60,6 +60,7 @@ Settings:
 Command interpreter: Deterministic
 Command: Сколько человек на видео
 Detector: yolo
+Confidence: 0.45
 Zone mode: Full frame
 Max frames: 60
 Count smoothing window: 5
@@ -87,6 +88,7 @@ Settings:
 Command interpreter: Deterministic
 Command: Уведоми, если человек зайдет в комнату
 Detector: yolo
+Confidence: 0.45
 Zone mode: Center 50%
 Max frames: 90
 Event cooldown, sec: 2.0
@@ -122,6 +124,7 @@ Command interpreter: Deterministic + Ollama fallback
 Ollama model: qwen2.5:3b
 Command: Понаблюдай за этим человеком
 Detector: yolo
+Confidence: 0.45
 Zone mode: Full frame
 Max frames: 30
 Annotated frames: events
@@ -150,6 +153,7 @@ Settings:
 Command interpreter: Deterministic
 Command: Следи за человеком
 Detector: yolo
+Confidence: 0.45
 Zone mode: Full frame
 Max frames: 30
 Annotated frames: events
