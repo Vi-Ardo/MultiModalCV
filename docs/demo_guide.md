@@ -72,6 +72,7 @@ Expected behavior:
 ```text
 The app produces count_in_frame events and annotated frames.
 The summary should show max people around 2.
+Annotated frames show only count changes, not every processed frame.
 ```
 
 ## Scenario 2: Person Enters a Zone

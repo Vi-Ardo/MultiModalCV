@@ -297,9 +297,43 @@ def select_frames_for_output(frames: list[FrameAnalysis], frame_mode: str) -> li
         return frames
 
     if frame_mode == "events":
+        if contains_count_events(frames):
+            return select_count_change_frames(frames)
         return [frame for frame in frames if frame.events]
 
     raise ValueError(f"Unsupported frame output mode: {frame_mode}")
+
+
+def contains_count_events(frames: list[FrameAnalysis]) -> bool:
+    return any(is_count_event(event) for frame in frames for event in frame.events)
+
+
+def select_count_change_frames(frames: list[FrameAnalysis]) -> list[FrameAnalysis]:
+    selected_frames: list[FrameAnalysis] = []
+    previous_count: int | None = None
+
+    for frame in frames:
+        count = frame_count_value(frame)
+        if count is None:
+            continue
+
+        if previous_count is None or count != previous_count:
+            selected_frames.append(frame)
+            previous_count = count
+
+    return selected_frames
+
+
+def frame_count_value(frame: FrameAnalysis) -> int | None:
+    for event in frame.events:
+        if is_count_event(event):
+            return int(event.metadata.get("count", 0))
+
+    return None
+
+
+def is_count_event(event: Event) -> bool:
+    return event.event_type in {EventType.COUNT_IN_FRAME, EventType.COUNT_IN_ZONE}
 
 
 def make_zone(name: str, zone_rect: str | None) -> Zone:

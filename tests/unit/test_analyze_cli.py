@@ -10,8 +10,12 @@ from multimodalcv.cli.analyze import (
     format_timestamp,
     main,
     print_event_summary,
+    select_count_change_frames,
+    select_frames_for_output,
 )
 from multimodalcv.core.models import BoundingBox, Detection, Event, EventType, ObjectClass
+from multimodalcv.pipeline.analysis import FrameAnalysis
+from multimodalcv.video.reader import VideoFrame
 
 
 def write_sample_video(path, *, frame_count: int = 3, fps: float = 10.0) -> None:
@@ -217,6 +221,59 @@ def test_analyze_main_can_save_only_event_frames(tmp_path, capsys) -> None:
     assert (frames_dir / "annotated_000001.jpg").exists()
 
 
+def test_select_frames_for_output_saves_only_count_change_frames() -> None:
+    frames = [
+        make_count_frame(frame_index=0, count=0),
+        make_count_frame(frame_index=1, count=0),
+        make_count_frame(frame_index=2, count=1),
+        make_count_frame(frame_index=3, count=1),
+        make_count_frame(frame_index=4, count=2),
+        make_count_frame(frame_index=5, count=1),
+    ]
+
+    selected = select_frames_for_output(frames, "events")
+
+    assert [frame.frame.frame_index for frame in selected] == [0, 2, 4, 5]
+
+
+def test_select_count_change_frames_uses_smoothed_count_value() -> None:
+    frames = [
+        make_count_frame(frame_index=0, count=0, raw_count=0),
+        make_count_frame(frame_index=1, count=0, raw_count=1),
+        make_count_frame(frame_index=2, count=1, raw_count=1),
+    ]
+
+    selected = select_count_change_frames(frames)
+
+    assert [frame.frame.frame_index for frame in selected] == [0, 2]
+
+
+def test_select_frames_for_output_keeps_all_non_count_event_frames() -> None:
+    frames = [
+        make_empty_frame(0),
+        make_event_frame(
+            frame_index=1,
+            event=Event(
+                event_type=EventType.ENTER_ZONE,
+                frame_index=1,
+                timestamp_sec=0.1,
+            ),
+        ),
+        make_event_frame(
+            frame_index=2,
+            event=Event(
+                event_type=EventType.LEAVE_ZONE,
+                frame_index=2,
+                timestamp_sec=0.2,
+            ),
+        ),
+    ]
+
+    selected = select_frames_for_output(frames, "events")
+
+    assert [frame.frame.frame_index for frame in selected] == [1, 2]
+
+
 def test_analyze_main_accepts_event_cooldown(tmp_path, capsys) -> None:
     video_path = tmp_path / "sample.mp4"
     output_path = tmp_path / "events.json"
@@ -382,3 +439,46 @@ def test_analyze_video_rejects_unknown_detector_backend(tmp_path) -> None:
             output_path=output_path,
             detector_name="unknown",
         )
+
+
+def make_count_frame(*, frame_index: int, count: int, raw_count: int | None = None) -> FrameAnalysis:
+    metadata = {"count": count}
+    if raw_count is not None:
+        metadata["raw_count"] = raw_count
+
+    return make_event_frame(
+        frame_index=frame_index,
+        event=Event(
+            event_type=EventType.COUNT_IN_FRAME,
+            frame_index=frame_index,
+            timestamp_sec=frame_index / 10,
+            object_class=ObjectClass.PERSON,
+            metadata=metadata,
+        ),
+    )
+
+
+def make_event_frame(*, frame_index: int, event: Event) -> FrameAnalysis:
+    return FrameAnalysis(
+        frame=make_video_frame(frame_index),
+        detections=[],
+        tracks=[],
+        events=[event],
+    )
+
+
+def make_empty_frame(frame_index: int) -> FrameAnalysis:
+    return FrameAnalysis(
+        frame=make_video_frame(frame_index),
+        detections=[],
+        tracks=[],
+        events=[],
+    )
+
+
+def make_video_frame(frame_index: int) -> VideoFrame:
+    return VideoFrame(
+        frame_index=frame_index,
+        timestamp_sec=frame_index / 10,
+        image=np.zeros((24, 32, 3), dtype=np.uint8),
+    )
