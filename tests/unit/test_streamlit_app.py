@@ -12,7 +12,6 @@ from interfaces.streamlit_app.app import (
     format_zone_rect,
     full_frame_zone_rect,
     render_command_preview,
-    role_capabilities,
     users_dataframe,
     zone_rect_values,
 )
@@ -114,20 +113,13 @@ def test_render_command_preview_uses_supplied_interpreter() -> None:
 
 def test_available_pages_depend_on_role() -> None:
     assert available_pages("admin") == (
-        "Обзор",
         "Анализ видео",
         "История анализов",
         "Пользователи",
         "Журнал действий",
     )
-    assert available_pages("operator") == ("Обзор", "Анализ видео", "История анализов")
-    assert available_pages("viewer") == ("Обзор", "История анализов")
-
-
-def test_role_capabilities_depend_on_role() -> None:
-    assert len(role_capabilities("admin")) == 3
-    assert len(role_capabilities("operator")) == 2
-    assert role_capabilities("viewer")[0][0] == "История"
+    assert available_pages("operator") == ("Анализ видео", "История анализов")
+    assert available_pages("viewer") == ("История анализов",)
 
 
 def test_filter_analysis_runs_combines_filters() -> None:

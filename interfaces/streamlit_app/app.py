@@ -75,8 +75,6 @@ def main() -> None:
         render_users_page(api_client, user)
     elif page == "Журнал действий":
         render_audit_page(api_client)
-    else:
-        render_overview_page(user)
 
 
 def authenticated_user(api_client: MultiModalCVApiClient) -> dict | None:
@@ -98,7 +96,6 @@ def render_login_page(api_client: MultiModalCVApiClient) -> None:
     left, center, right = st.columns([1, 1.25, 1])
     with center:
         st.title("MultiModalCV")
-        st.caption("Анализ архивных видеозаписей по текстовым командам")
         st.subheader("Вход в систему")
         with st.form("login_form"):
             username = st.text_input("Имя пользователя", placeholder="Введите логин")
@@ -146,50 +143,20 @@ def render_navigation(user: dict, api_client: MultiModalCVApiClient) -> str:
 def available_pages(role: str) -> tuple[str, ...]:
     if role == "admin":
         return (
-            "Обзор",
             "Анализ видео",
             "История анализов",
             "Пользователи",
             "Журнал действий",
         )
     if role == "operator":
-        return ("Обзор", "Анализ видео", "История анализов")
-    return ("Обзор", "История анализов")
-
-
-def role_capabilities(role: str) -> tuple[tuple[str, str], ...]:
-    common = ("История", "Просмотр сохраненных результатов и кадров событий.")
-    if role == "admin":
-        return (
-            ("Анализ", "Запуск обработки архивных видеозаписей."),
-            ("Пользователи", "Создание учетных записей и настройка ролей."),
-            ("Контроль", "Просмотр журнала действий системы."),
-        )
-    if role == "operator":
-        return (
-            ("Анализ", "Загрузка видео и выполнение текстовых команд."),
-            common,
-        )
-    return (common,)
+        return ("Анализ видео", "История анализов")
+    return ("История анализов",)
 
 
 def clear_auth_session() -> None:
     st.session_state.pop("access_token", None)
     st.session_state.pop("current_user", None)
     st.session_state.pop("last_run", None)
-
-
-def render_overview_page(user: dict) -> None:
-    st.title("Обзор")
-    role = str(user["role"])
-    st.caption(f"Текущая роль: {ROLE_LABELS.get(role, role)}")
-
-    capabilities = role_capabilities(role)
-    columns = st.columns(len(capabilities))
-    for column, (title, description) in zip(columns, capabilities, strict=True):
-        with column:
-            st.markdown(f"#### {title}")
-            st.write(description)
 
 
 def render_analysis_page(api_client: MultiModalCVApiClient) -> None:
