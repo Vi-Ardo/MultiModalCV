@@ -7,6 +7,7 @@ from multimodalcv.auth.store import (
     AuthStore,
     AuthenticationError,
     DuplicateUsernameError,
+    UserNotFoundError,
 )
 
 
@@ -87,3 +88,46 @@ def test_expired_session_is_rejected(tmp_path) -> None:
     session = store.create_session(user, lifetime=timedelta(seconds=-1))
 
     assert store.get_user_by_session(session.token) is None
+
+
+def test_get_user_rejects_unknown_id(tmp_path) -> None:
+    store = make_store(tmp_path)
+
+    with pytest.raises(UserNotFoundError):
+        store.get_user(999)
+
+
+def test_update_user_changes_role_and_active_state(tmp_path) -> None:
+    store = make_store(tmp_path)
+    user = store.create_user("viewer", "viewer-password", Role.VIEWER)
+
+    updated_user = store.update_user(user.id, role=Role.OPERATOR, is_active=False)
+
+    assert updated_user.role == Role.OPERATOR
+    assert not updated_user.is_active
+    assert store.get_user(user.id) == updated_user
+
+
+def test_deactivating_user_revokes_sessions(tmp_path) -> None:
+    store = make_store(tmp_path)
+    user = store.create_user("viewer", "viewer-password", Role.VIEWER)
+    session = store.create_session(user)
+
+    store.update_user(user.id, is_active=False)
+
+    assert store.get_user_by_session(session.token) is None
+    with pytest.raises(AuthenticationError):
+        store.authenticate("viewer", "viewer-password")
+
+
+def test_reset_password_revokes_sessions_and_changes_credentials(tmp_path) -> None:
+    store = make_store(tmp_path)
+    user = store.create_user("operator", "old-password", Role.OPERATOR)
+    session = store.create_session(user)
+
+    store.reset_password(user.id, "new-password")
+
+    assert store.get_user_by_session(session.token) is None
+    with pytest.raises(AuthenticationError):
+        store.authenticate("operator", "old-password")
+    assert store.authenticate("operator", "new-password") == user

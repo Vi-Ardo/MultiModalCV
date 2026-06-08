@@ -238,6 +238,20 @@ Interactive API documentation is available at:
 http://localhost:8000/docs
 ```
 
+The authentication API currently provides:
+
+- `POST /auth/login` - create a user session;
+- `GET /auth/me` - return the current user and role;
+- `POST /auth/logout` - revoke the current session;
+- `GET /users` - list users, administrator only;
+- `POST /users` - create users, administrator only;
+- `PATCH /users/{id}` - change a role or active state, administrator only;
+- `POST /users/{id}/reset-password` - reset a password, administrator only;
+- `GET /audit` - view the audit log, administrator only.
+
+Supported roles are `admin`, `operator`, and `viewer`. Role checks are enforced by
+the backend, including when the API is called directly.
+
 ## Project Layout
 
 ```text

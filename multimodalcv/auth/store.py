@@ -22,6 +22,10 @@ class DuplicateUsernameError(ValueError):
     """Raised when attempting to create an existing username."""
 
 
+class UserNotFoundError(ValueError):
+    """Raised when a requested user does not exist."""
+
+
 class AuthStore:
     """Small SQLite repository used by the local demonstration server."""
 
@@ -91,6 +95,63 @@ class AuthStore:
                 "SELECT id, username, role, is_active, created_at FROM users ORDER BY username"
             ).fetchall()
         return [_user_from_row(row) for row in rows]
+
+    def get_user(self, user_id: int) -> User:
+        with closing(self._connect()) as connection:
+            row = connection.execute(
+                """
+                SELECT id, username, role, is_active, created_at
+                FROM users
+                WHERE id = ?
+                """,
+                (user_id,),
+            ).fetchone()
+        if row is None:
+            raise UserNotFoundError(f"user not found: {user_id}")
+        return _user_from_row(row)
+
+    def update_user(
+        self,
+        user_id: int,
+        *,
+        role: Role | None = None,
+        is_active: bool | None = None,
+    ) -> User:
+        current_user = self.get_user(user_id)
+        updated_role = role or current_user.role
+        updated_active = current_user.is_active if is_active is None else is_active
+
+        with closing(self._connect()) as connection:
+            connection.execute(
+                """
+                UPDATE users
+                SET role = ?, is_active = ?
+                WHERE id = ?
+                """,
+                (updated_role.value, int(updated_active), user_id),
+            )
+            if not updated_active:
+                connection.execute("DELETE FROM sessions WHERE user_id = ?", (user_id,))
+            connection.commit()
+
+        return User(
+            id=current_user.id,
+            username=current_user.username,
+            role=updated_role,
+            is_active=updated_active,
+            created_at=current_user.created_at,
+        )
+
+    def reset_password(self, user_id: int, password: str) -> None:
+        self.get_user(user_id)
+        password_hash = hash_password(password)
+        with closing(self._connect()) as connection:
+            connection.execute(
+                "UPDATE users SET password_hash = ? WHERE id = ?",
+                (password_hash, user_id),
+            )
+            connection.execute("DELETE FROM sessions WHERE user_id = ?", (user_id,))
+            connection.commit()
 
     def authenticate(self, username: str, password: str) -> User:
         normalized_username = normalize_username(username)
