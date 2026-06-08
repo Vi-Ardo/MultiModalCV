@@ -12,6 +12,9 @@ data/
 videos/
 outputs/
 runs/
+*.db
+*.db-shm
+*.db-wal
 *.pt
 *.mp4
 *.avi

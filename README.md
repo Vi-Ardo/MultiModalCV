@@ -206,6 +206,38 @@ After upload, the interface reads video metadata and configures zones using the 
 
 The first YOLO run may download model weights such as `yolov8n.pt`. Model weights are intentionally ignored by git.
 
+## Run Authentication API
+
+Install the web dependencies:
+
+```powershell
+.venv\Scripts\python.exe -m pip install -e .[web]
+```
+
+Create the first administrator:
+
+```powershell
+.venv\Scripts\multimodalcv-create-admin.exe admin
+```
+
+Start the local FastAPI server:
+
+```powershell
+.venv\Scripts\uvicorn.exe multimodalcv.api.app:app --reload
+```
+
+The API is then available at:
+
+```text
+http://localhost:8000
+```
+
+Interactive API documentation is available at:
+
+```text
+http://localhost:8000/docs
+```
+
 ## Project Layout
 
 ```text
