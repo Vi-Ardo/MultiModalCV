@@ -88,6 +88,42 @@ class MultiModalCVApiClient:
     def list_audit(self, token: str, *, limit: int = 100) -> list[dict[str, Any]]:
         return self._request("GET", f"/audit?limit={limit}", token=token)
 
+    def create_analysis_run(
+        self,
+        token: str,
+        *,
+        video_name: str,
+        command: str,
+        detector: str,
+        processed_frames: int,
+        event_count: int,
+        summary: dict[str, Any],
+        events: list[dict[str, Any]],
+        frame_paths: list[str],
+    ) -> dict[str, Any]:
+        return self._request(
+            "POST",
+            "/analysis-runs",
+            token=token,
+            json={
+                "video_name": video_name,
+                "command": command,
+                "detector": detector,
+                "status": "completed",
+                "processed_frames": processed_frames,
+                "event_count": event_count,
+                "summary": summary,
+                "events": events,
+                "frame_paths": frame_paths,
+            },
+        )
+
+    def list_analysis_runs(self, token: str, *, limit: int = 100) -> list[dict[str, Any]]:
+        return self._request("GET", f"/analysis-runs?limit={limit}", token=token)
+
+    def get_analysis_run(self, token: str, run_id: int) -> dict[str, Any]:
+        return self._request("GET", f"/analysis-runs/{run_id}", token=token)
+
     def _request(
         self,
         method: str,

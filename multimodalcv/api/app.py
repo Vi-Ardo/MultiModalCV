@@ -4,13 +4,14 @@ import os
 from contextlib import asynccontextmanager
 from datetime import datetime
 from pathlib import Path
-from typing import Annotated, Callable
+from typing import Annotated, Any, Callable
 
 from fastapi import Depends, FastAPI, Header, HTTPException, status
 from pydantic import BaseModel, ConfigDict
 
-from multimodalcv.auth.models import AuditEntry, Role, User
+from multimodalcv.auth.models import AnalysisRun, AuditEntry, Role, User
 from multimodalcv.auth.store import (
+    AnalysisRunNotFoundError,
     DEFAULT_DATABASE_PATH,
     AuthStore,
     AuthenticationError,
@@ -61,6 +62,36 @@ class AuditEntryResponse(BaseModel):
     username: str | None
     action: str
     details: str | None
+    created_at: datetime
+
+
+class CreateAnalysisRunRequest(BaseModel):
+    video_name: str
+    command: str
+    detector: str
+    status: str = "completed"
+    processed_frames: int
+    event_count: int
+    summary: dict[str, Any]
+    events: list[dict[str, Any]]
+    frame_paths: list[str]
+
+
+class AnalysisRunResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    user_id: int
+    username: str
+    video_name: str
+    command: str
+    detector: str
+    status: str
+    processed_frames: int
+    event_count: int
+    summary: dict[str, Any]
+    events: list[dict[str, Any]]
+    frame_paths: list[str]
     created_at: datetime
 
 
@@ -129,6 +160,7 @@ def create_app(database_path: Path | None = None) -> FastAPI:
         return role_dependency
 
     require_admin = require_role(Role.ADMIN)
+    require_analysis_operator = require_role(Role.ADMIN, Role.OPERATOR)
 
     @app.get("/auth/me", response_model=UserResponse)
     def me(user: Annotated[User, Depends(current_user)]) -> User:
@@ -236,6 +268,68 @@ def create_app(database_path: Path | None = None) -> FastAPI:
                 detail="limit must be between 1 and 500",
             )
         return store.list_audit_entries(limit=limit)
+
+    @app.post(
+        "/analysis-runs",
+        response_model=AnalysisRunResponse,
+        status_code=status.HTTP_201_CREATED,
+    )
+    def create_analysis_run(
+        payload: CreateAnalysisRunRequest,
+        user: Annotated[User, Depends(require_analysis_operator)],
+    ) -> AnalysisRun:
+        run = store.create_analysis_run(
+            user=user,
+            video_name=payload.video_name,
+            command=payload.command,
+            detector=payload.detector,
+            status=payload.status,
+            processed_frames=payload.processed_frames,
+            event_count=payload.event_count,
+            summary=payload.summary,
+            events=payload.events,
+            frame_paths=payload.frame_paths,
+        )
+        store.record_audit(
+            "analysis_created",
+            user=user,
+            details=f"run_id={run.id};video={run.video_name}",
+        )
+        return run
+
+    @app.get("/analysis-runs", response_model=list[AnalysisRunResponse])
+    def list_analysis_runs(
+        user: Annotated[User, Depends(current_user)],
+        limit: int = 100,
+    ) -> list[AnalysisRun]:
+        if limit < 1 or limit > 500:
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail="limit must be between 1 and 500",
+            )
+        runs = store.list_analysis_runs(limit=limit)
+        store.record_audit(
+            "analysis_history_viewed",
+            user=user,
+            details=f"count={len(runs)}",
+        )
+        return runs
+
+    @app.get("/analysis-runs/{run_id}", response_model=AnalysisRunResponse)
+    def get_analysis_run(
+        run_id: int,
+        user: Annotated[User, Depends(current_user)],
+    ) -> AnalysisRun:
+        try:
+            run = store.get_analysis_run(run_id)
+        except AnalysisRunNotFoundError as error:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(error)) from error
+        store.record_audit(
+            "analysis_result_viewed",
+            user=user,
+            details=f"run_id={run.id}",
+        )
+        return run
 
     return app
 

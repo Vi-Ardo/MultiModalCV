@@ -63,7 +63,9 @@ def main() -> None:
 
     page = render_navigation(user, api_client)
     if page == "Анализ видео":
-        render_analysis_page()
+        render_analysis_page(api_client)
+    elif page == "История анализов":
+        render_analysis_history_page(api_client)
     elif page == "Пользователи":
         render_users_page(api_client, user)
     elif page == "Журнал действий":
@@ -134,10 +136,16 @@ def render_navigation(user: dict, api_client: MultiModalCVApiClient) -> str:
 
 def available_pages(role: str) -> tuple[str, ...]:
     if role == "admin":
-        return ("Обзор", "Анализ видео", "Пользователи", "Журнал действий")
+        return (
+            "Обзор",
+            "Анализ видео",
+            "История анализов",
+            "Пользователи",
+            "Журнал действий",
+        )
     if role == "operator":
-        return ("Обзор", "Анализ видео")
-    return ("Обзор",)
+        return ("Обзор", "Анализ видео", "История анализов")
+    return ("Обзор", "История анализов")
 
 
 def clear_auth_session() -> None:
@@ -156,10 +164,10 @@ def render_overview_page(user: dict) -> None:
     elif role == "operator":
         st.info("Доступны загрузка видео и запуск анализа.")
     else:
-        st.info("Доступен просмотр информации. Запуск анализа и управление системой запрещены.")
+        st.info("Доступны обзор и просмотр сохраненных результатов. Запуск анализа запрещен.")
 
 
-def render_analysis_page() -> None:
+def render_analysis_page(api_client: MultiModalCVApiClient) -> None:
     st.title("Анализ видео")
 
     with st.sidebar:
@@ -238,12 +246,125 @@ def render_analysis_page() -> None:
             "run_dir": run_dir,
             "result": result,
         }
+        try:
+            save_analysis_history(
+                api_client,
+                video_name=uploaded_file.name,
+                command=command,
+                detector=detector,
+                result=result,
+                run_dir=run_dir,
+            )
+        except ApiClientError as error:
+            st.warning(f"Анализ завершен, но история не сохранена: {error}")
 
     last_run = st.session_state.get("last_run")
     if last_run:
         render_results(last_run["result"], last_run["run_dir"])
     else:
         render_ready_state(uploaded_file.name)
+
+
+def save_analysis_history(
+    api_client: MultiModalCVApiClient,
+    *,
+    video_name: str,
+    command: str,
+    detector: str,
+    result: AnalyzeResult,
+    run_dir: Path,
+) -> dict:
+    summary = load_summary(result.summary_path)
+    frame_paths = sorted((result.frames_dir or (run_dir / "frames")).glob("*.jpg"))
+    return api_client.create_analysis_run(
+        st.session_state["access_token"],
+        video_name=video_name,
+        command=command,
+        detector=detector,
+        processed_frames=result.processed_frames,
+        event_count=len(result.events),
+        summary=summary,
+        events=[event_to_dict(event) for event in result.events],
+        frame_paths=[str(path.resolve()) for path in frame_paths],
+    )
+
+
+def render_analysis_history_page(api_client: MultiModalCVApiClient) -> None:
+    st.title("История анализов")
+    token = st.session_state["access_token"]
+    try:
+        runs = api_client.list_analysis_runs(token, limit=200)
+    except ApiClientError as error:
+        st.error(str(error))
+        return
+
+    if not runs:
+        st.info("Сохраненных анализов пока нет.")
+        return
+
+    st.dataframe(analysis_runs_dataframe(runs), use_container_width=True, hide_index=True)
+    selected_run = st.selectbox(
+        "Результат",
+        runs,
+        format_func=lambda run: (
+            f"#{run['id']} · {run['video_name']} · {run['username']} · "
+            f"{run['created_at']}"
+        ),
+    )
+    try:
+        run = api_client.get_analysis_run(token, int(selected_run["id"]))
+    except ApiClientError as error:
+        st.error(str(error))
+        return
+
+    render_saved_analysis(run)
+
+
+def analysis_runs_dataframe(runs: list[dict]) -> pd.DataFrame:
+    return pd.DataFrame(
+        [
+            {
+                "ID": run["id"],
+                "Дата": run["created_at"],
+                "Видео": run["video_name"],
+                "Команда": run["command"],
+                "Автор": run["username"],
+                "Статус": run["status"],
+                "Кадры": run["processed_frames"],
+                "События": run["event_count"],
+            }
+            for run in runs
+        ]
+    )
+
+
+def render_saved_analysis(run: dict) -> None:
+    st.subheader(f"Результат #{run['id']}")
+    st.caption(
+        f"{run['video_name']} · {run['username']} · {run['detector']} · "
+        f"{run['created_at']}"
+    )
+    st.write(f"**Команда:** {run['command']}")
+    render_metrics(run.get("summary", {}))
+
+    st.markdown("**События**")
+    events_df = event_dicts_to_dataframe(run.get("events", []))
+    if events_df.empty:
+        st.info("События отсутствуют.")
+    else:
+        st.dataframe(events_df, use_container_width=True, hide_index=True)
+
+    frame_paths = existing_frame_paths(run.get("frame_paths", []))
+    if frame_paths:
+        st.markdown("**Аннотированные кадры**")
+        render_frame_viewer(frame_paths)
+        render_frame_gallery(frame_paths)
+    else:
+        st.info("Аннотированные кадры для этого запуска недоступны.")
+
+
+def existing_frame_paths(paths: list[str]) -> list[Path]:
+    return [Path(path) for path in paths if Path(path).exists()]
 
 
 def render_users_page(api_client: MultiModalCVApiClient, current_user: dict) -> None:
@@ -594,7 +715,11 @@ def load_summary(summary_path: Path) -> dict:
 
 
 def events_to_dataframe(events: list[Event]) -> pd.DataFrame:
-    rows = [event_to_dict(event) for event in events]
+    return event_dicts_to_dataframe([event_to_dict(event) for event in events])
+
+
+def event_dicts_to_dataframe(rows: list[dict]) -> pd.DataFrame:
+    rows = [dict(row) for row in rows]
     if not rows:
         return pd.DataFrame()
 

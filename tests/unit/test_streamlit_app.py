@@ -1,10 +1,12 @@
 from pathlib import Path
 
 from interfaces.streamlit_app.app import (
+    analysis_runs_dataframe,
     audit_dataframe,
     available_pages,
     build_command_interpreter,
     center_zone_rect,
+    event_dicts_to_dataframe,
     find_frame_by_name,
     format_zone_rect,
     full_frame_zone_rect,
@@ -112,11 +114,12 @@ def test_available_pages_depend_on_role() -> None:
     assert available_pages("admin") == (
         "Обзор",
         "Анализ видео",
+        "История анализов",
         "Пользователи",
         "Журнал действий",
     )
-    assert available_pages("operator") == ("Обзор", "Анализ видео")
-    assert available_pages("viewer") == ("Обзор",)
+    assert available_pages("operator") == ("Обзор", "Анализ видео", "История анализов")
+    assert available_pages("viewer") == ("Обзор", "История анализов")
 
 
 def test_users_dataframe_translates_role_and_status() -> None:
@@ -153,3 +156,38 @@ def test_audit_dataframe_formats_optional_values() -> None:
 
     assert dataframe.iloc[0]["Пользователь"] == "-"
     assert dataframe.iloc[0]["Подробности"] == "-"
+
+
+def test_analysis_runs_dataframe_contains_demo_columns() -> None:
+    dataframe = analysis_runs_dataframe(
+        [
+            {
+                "id": 4,
+                "created_at": "2026-06-08T12:00:00+00:00",
+                "video_name": "sample.mp4",
+                "command": "Посчитай людей",
+                "username": "operator",
+                "status": "completed",
+                "processed_frames": 60,
+                "event_count": 3,
+            }
+        ]
+    )
+
+    assert dataframe.iloc[0]["Видео"] == "sample.mp4"
+    assert dataframe.iloc[0]["Автор"] == "operator"
+    assert dataframe.iloc[0]["События"] == 3
+
+
+def test_event_dicts_to_dataframe_flattens_metadata() -> None:
+    dataframe = event_dicts_to_dataframe(
+        [
+            {
+                "event_type": "count_in_frame",
+                "frame_index": 10,
+                "metadata": {"count": 2},
+            }
+        ]
+    )
+
+    assert dataframe.iloc[0]["metadata.count"] == 2

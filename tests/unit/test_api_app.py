@@ -197,3 +197,73 @@ def test_only_admin_can_view_audit_log(tmp_path) -> None:
         assert admin_response.status_code == 200
         assert admin_response.json()
         assert operator_response.status_code == 403
+
+
+def test_admin_and_operator_can_create_analysis_runs(tmp_path) -> None:
+    with make_client(tmp_path) as client:
+        for username, password in (
+            ("admin", "admin-password"),
+            ("operator", "operator-password"),
+        ):
+            headers = login_headers(client, username, password)
+            response = client.post(
+                "/analysis-runs",
+                headers=headers,
+                json=analysis_run_payload(video_name=f"{username}.mp4"),
+            )
+
+            assert response.status_code == 201
+            assert response.json()["username"] == username
+
+
+def test_viewer_cannot_create_but_can_read_analysis_runs(tmp_path) -> None:
+    with make_client(tmp_path) as client:
+        operator_headers = login_headers(client, "operator", "operator-password")
+        viewer_headers = login_headers(client, "viewer", "viewer-password")
+        created = client.post(
+            "/analysis-runs",
+            headers=operator_headers,
+            json=analysis_run_payload(),
+        ).json()
+
+        forbidden = client.post(
+            "/analysis-runs",
+            headers=viewer_headers,
+            json=analysis_run_payload(video_name="forbidden.mp4"),
+        )
+        history = client.get("/analysis-runs", headers=viewer_headers)
+        detail = client.get(f"/analysis-runs/{created['id']}", headers=viewer_headers)
+
+        assert forbidden.status_code == 403
+        assert history.status_code == 200
+        assert history.json()[0]["video_name"] == "sample.mp4"
+        assert detail.status_code == 200
+        assert detail.json()["events"][0]["metadata"]["count"] == 2
+
+
+def test_get_analysis_run_returns_not_found(tmp_path) -> None:
+    with make_client(tmp_path) as client:
+        headers = login_headers(client, "viewer", "viewer-password")
+
+        assert client.get("/analysis-runs/999", headers=headers).status_code == 404
+
+
+def analysis_run_payload(*, video_name: str = "sample.mp4") -> dict:
+    return {
+        "video_name": video_name,
+        "command": "Посчитай людей",
+        "detector": "yolo",
+        "status": "completed",
+        "processed_frames": 60,
+        "event_count": 1,
+        "summary": {"processed_frames": 60, "event_count": 1},
+        "events": [
+            {
+                "event_type": "count_in_frame",
+                "frame_index": 12,
+                "timestamp_sec": 0.4,
+                "metadata": {"count": 2},
+            }
+        ],
+        "frame_paths": ["C:/frames/annotated_000012.jpg"],
+    }

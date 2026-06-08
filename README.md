@@ -206,7 +206,8 @@ http://localhost:8501
 
 The interface starts with a login page and builds its navigation from the current
 role. Administrators can manage users and view the audit log. Operators can run
-video analysis. Viewers have read-only access to the overview page.
+video analysis. Viewers have read-only access to the overview and saved analysis
+history.
 
 The analysis page supports video upload, text commands, YOLO/fake detector mode,
 zone rectangle settings, count smoothing, event cooldown, summary metrics, event
@@ -262,6 +263,9 @@ The authentication API currently provides:
 - `PATCH /users/{id}` - change a role or active state, administrator only;
 - `POST /users/{id}/reset-password` - reset a password, administrator only;
 - `GET /audit` - view the audit log, administrator only.
+- `POST /analysis-runs` - save a completed analysis, administrator or operator;
+- `GET /analysis-runs` - view analysis history, all authenticated roles;
+- `GET /analysis-runs/{id}` - view a saved result, all authenticated roles.
 
 Supported roles are `admin`, `operator`, and `viewer`. Role checks are enforced by
 the backend, including when the API is called directly.

@@ -3,11 +3,12 @@
 from __future__ import annotations
 
 import sqlite3
+import json
 from contextlib import closing
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
-from multimodalcv.auth.models import AuditEntry, Role, Session, User
+from multimodalcv.auth.models import AnalysisRun, AuditEntry, Role, Session, User
 from multimodalcv.auth.security import generate_session_token, hash_password, verify_password
 
 
@@ -24,6 +25,10 @@ class DuplicateUsernameError(ValueError):
 
 class UserNotFoundError(ValueError):
     """Raised when a requested user does not exist."""
+
+
+class AnalysisRunNotFoundError(ValueError):
+    """Raised when a requested analysis run does not exist."""
 
 
 class AuthStore:
@@ -62,8 +67,26 @@ class AuthStore:
                     created_at TEXT NOT NULL
                 );
 
+                CREATE TABLE IF NOT EXISTS analysis_runs (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE RESTRICT,
+                    username TEXT NOT NULL,
+                    video_name TEXT NOT NULL,
+                    command TEXT NOT NULL,
+                    detector TEXT NOT NULL,
+                    status TEXT NOT NULL,
+                    processed_frames INTEGER NOT NULL,
+                    event_count INTEGER NOT NULL,
+                    summary_json TEXT NOT NULL,
+                    events_json TEXT NOT NULL,
+                    frame_paths_json TEXT NOT NULL,
+                    created_at TEXT NOT NULL
+                );
+
                 CREATE INDEX IF NOT EXISTS idx_sessions_user_id ON sessions(user_id);
                 CREATE INDEX IF NOT EXISTS idx_audit_created_at ON audit_log(created_at);
+                CREATE INDEX IF NOT EXISTS idx_analysis_runs_created_at
+                    ON analysis_runs(created_at);
                 """
             )
             connection.commit()
@@ -271,6 +294,88 @@ class AuthStore:
             for row in rows
         ]
 
+    def create_analysis_run(
+        self,
+        *,
+        user: User,
+        video_name: str,
+        command: str,
+        detector: str,
+        status: str,
+        processed_frames: int,
+        event_count: int,
+        summary: dict,
+        events: list[dict],
+        frame_paths: list[str],
+    ) -> AnalysisRun:
+        created_at = utc_now()
+        with closing(self._connect()) as connection:
+            cursor = connection.execute(
+                """
+                INSERT INTO analysis_runs (
+                    user_id, username, video_name, command, detector, status,
+                    processed_frames, event_count, summary_json, events_json,
+                    frame_paths_json, created_at
+                )
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    user.id,
+                    user.username,
+                    video_name,
+                    command,
+                    detector,
+                    status,
+                    processed_frames,
+                    event_count,
+                    json.dumps(summary, ensure_ascii=False),
+                    json.dumps(events, ensure_ascii=False),
+                    json.dumps(frame_paths, ensure_ascii=False),
+                    created_at.isoformat(),
+                ),
+            )
+            run_id = int(cursor.lastrowid)
+            connection.commit()
+
+        return AnalysisRun(
+            id=run_id,
+            user_id=user.id,
+            username=user.username,
+            video_name=video_name,
+            command=command,
+            detector=detector,
+            status=status,
+            processed_frames=processed_frames,
+            event_count=event_count,
+            summary=summary,
+            events=events,
+            frame_paths=frame_paths,
+            created_at=created_at,
+        )
+
+    def list_analysis_runs(self, *, limit: int = 100) -> list[AnalysisRun]:
+        with closing(self._connect()) as connection:
+            rows = connection.execute(
+                """
+                SELECT *
+                FROM analysis_runs
+                ORDER BY id DESC
+                LIMIT ?
+                """,
+                (limit,),
+            ).fetchall()
+        return [_analysis_run_from_row(row) for row in rows]
+
+    def get_analysis_run(self, run_id: int) -> AnalysisRun:
+        with closing(self._connect()) as connection:
+            row = connection.execute(
+                "SELECT * FROM analysis_runs WHERE id = ?",
+                (run_id,),
+            ).fetchone()
+        if row is None:
+            raise AnalysisRunNotFoundError(f"analysis run not found: {run_id}")
+        return _analysis_run_from_row(row)
+
     def _connect(self) -> sqlite3.Connection:
         connection = sqlite3.connect(self.database_path)
         connection.row_factory = sqlite3.Row
@@ -295,5 +400,23 @@ def _user_from_row(row: sqlite3.Row) -> User:
         username=row["username"],
         role=Role(row["role"]),
         is_active=bool(row["is_active"]),
+        created_at=datetime.fromisoformat(row["created_at"]),
+    )
+
+
+def _analysis_run_from_row(row: sqlite3.Row) -> AnalysisRun:
+    return AnalysisRun(
+        id=int(row["id"]),
+        user_id=int(row["user_id"]),
+        username=row["username"],
+        video_name=row["video_name"],
+        command=row["command"],
+        detector=row["detector"],
+        status=row["status"],
+        processed_frames=int(row["processed_frames"]),
+        event_count=int(row["event_count"]),
+        summary=json.loads(row["summary_json"]),
+        events=json.loads(row["events_json"]),
+        frame_paths=json.loads(row["frame_paths_json"]),
         created_at=datetime.fromisoformat(row["created_at"]),
     )

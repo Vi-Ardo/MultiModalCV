@@ -4,6 +4,7 @@ import pytest
 
 from multimodalcv.auth.models import Role
 from multimodalcv.auth.store import (
+    AnalysisRunNotFoundError,
     AuthStore,
     AuthenticationError,
     DuplicateUsernameError,
@@ -131,3 +132,31 @@ def test_reset_password_revokes_sessions_and_changes_credentials(tmp_path) -> No
     with pytest.raises(AuthenticationError):
         store.authenticate("operator", "old-password")
     assert store.authenticate("operator", "new-password") == user
+
+
+def test_create_list_and_get_analysis_run(tmp_path) -> None:
+    store = make_store(tmp_path)
+    operator = store.create_user("operator", "operator-password", Role.OPERATOR)
+
+    created_run = store.create_analysis_run(
+        user=operator,
+        video_name="sample.mp4",
+        command="Посчитай людей",
+        detector="yolo",
+        status="completed",
+        processed_frames=60,
+        event_count=3,
+        summary={"event_count": 3},
+        events=[{"event_type": "count_in_frame", "metadata": {"count": 2}}],
+        frame_paths=["C:/frames/annotated_000010.jpg"],
+    )
+
+    assert store.list_analysis_runs() == [created_run]
+    assert store.get_analysis_run(created_run.id) == created_run
+
+
+def test_get_analysis_run_rejects_unknown_id(tmp_path) -> None:
+    store = make_store(tmp_path)
+
+    with pytest.raises(AnalysisRunNotFoundError):
+        store.get_analysis_run(999)
