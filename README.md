@@ -186,6 +186,14 @@ Each analysis run also writes `summary.json` next to `events.json` by default. U
 
 ## Run Streamlit Interface
 
+Start the FastAPI backend first:
+
+```powershell
+.venv\Scripts\uvicorn.exe multimodalcv.api.app:app --host 127.0.0.1 --port 8000
+```
+
+Then start the interface in another terminal:
+
 ```powershell
 .venv\Scripts\streamlit.exe run interfaces\streamlit_app\app.py
 ```
@@ -196,7 +204,13 @@ Then open:
 http://localhost:8501
 ```
 
-The interface supports video upload, command selection, YOLO/fake detector mode, zone rectangle settings, count smoothing, event cooldown, summary metrics, event tables, and annotated frame previews.
+The interface starts with a login page and builds its navigation from the current
+role. Administrators can manage users and view the audit log. Operators can run
+video analysis. Viewers have read-only access to the overview page.
+
+The analysis page supports video upload, text commands, YOLO/fake detector mode,
+zone rectangle settings, count smoothing, event cooldown, summary metrics, event
+tables, and annotated frame previews.
 
 After upload, the interface reads video metadata and configures zones using the actual frame size. Zone modes:
 

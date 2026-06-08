@@ -3,12 +3,14 @@
 from __future__ import annotations
 
 import json
+import os
 from pathlib import Path
 from uuid import uuid4
 
 import pandas as pd
 import streamlit as st
 
+from interfaces.streamlit_app.api_client import ApiClientError, MultiModalCVApiClient
 from multimodalcv.cli.analyze import AnalyzeResult, analyze_video
 from multimodalcv.commands.interpreter import (
     CommandInterpreter,
@@ -38,15 +40,127 @@ INTERPRETER_MODES = (
     "Deterministic + Ollama fallback",
 )
 DEFAULT_OLLAMA_MODEL = "qwen2.5:3b"
+DEFAULT_API_URL = "http://localhost:8000"
+ROLE_LABELS = {
+    "admin": "Администратор",
+    "operator": "Оператор",
+    "viewer": "Наблюдатель",
+}
 
 
 def main() -> None:
     st.set_page_config(page_title="MultiModalCV", layout="wide")
     inject_styles()
+    api_client = MultiModalCVApiClient(os.environ.get("MULTIMODALCV_API_URL", DEFAULT_API_URL))
 
+    user = authenticated_user(api_client)
+    if user is None:
+        render_login_page(api_client)
+        return
+
+    page = render_navigation(user, api_client)
+    if page == "Анализ видео":
+        render_analysis_page()
+    elif page == "Пользователи":
+        render_users_page(api_client, user)
+    elif page == "Журнал действий":
+        render_audit_page(api_client)
+    else:
+        render_overview_page(user)
+
+
+def authenticated_user(api_client: MultiModalCVApiClient) -> dict | None:
+    token = st.session_state.get("access_token")
+    if not token:
+        return None
+
+    try:
+        user = api_client.me(token)
+    except ApiClientError:
+        clear_auth_session()
+        return None
+
+    st.session_state["current_user"] = user
+    return user
+
+
+def render_login_page(api_client: MultiModalCVApiClient) -> None:
     st.title("MultiModalCV")
+    st.subheader("Вход в систему")
+
+    left, center, right = st.columns([1, 1.25, 1])
+    with center:
+        with st.form("login_form"):
+            username = st.text_input("Имя пользователя")
+            password = st.text_input("Пароль", type="password")
+            submitted = st.form_submit_button("Войти", type="primary", use_container_width=True)
+
+        if submitted:
+            try:
+                token = api_client.login(username, password)
+                user = api_client.me(token)
+            except ApiClientError as error:
+                st.error(str(error))
+            else:
+                st.session_state["access_token"] = token
+                st.session_state["current_user"] = user
+                st.rerun()
+
+
+def render_navigation(user: dict, api_client: MultiModalCVApiClient) -> str:
+    role = str(user["role"])
+    pages = available_pages(role)
 
     with st.sidebar:
+        st.title("MultiModalCV")
+        st.write(f"**{user['username']}**")
+        st.caption(ROLE_LABELS.get(role, role))
+        page = st.radio("Раздел", pages)
+        if st.button("Выйти", use_container_width=True):
+            token = st.session_state.get("access_token")
+            if token:
+                try:
+                    api_client.logout(token)
+                except ApiClientError:
+                    pass
+            clear_auth_session()
+            st.rerun()
+
+    return page
+
+
+def available_pages(role: str) -> tuple[str, ...]:
+    if role == "admin":
+        return ("Обзор", "Анализ видео", "Пользователи", "Журнал действий")
+    if role == "operator":
+        return ("Обзор", "Анализ видео")
+    return ("Обзор",)
+
+
+def clear_auth_session() -> None:
+    st.session_state.pop("access_token", None)
+    st.session_state.pop("current_user", None)
+    st.session_state.pop("last_run", None)
+
+
+def render_overview_page(user: dict) -> None:
+    st.title("Обзор")
+    role = str(user["role"])
+    st.write(f"Вы вошли как **{ROLE_LABELS.get(role, role)}**.")
+
+    if role == "admin":
+        st.info("Доступны анализ видео, управление пользователями и журнал действий.")
+    elif role == "operator":
+        st.info("Доступны загрузка видео и запуск анализа.")
+    else:
+        st.info("Доступен просмотр информации. Запуск анализа и управление системой запрещены.")
+
+
+def render_analysis_page() -> None:
+    st.title("Анализ видео")
+
+    with st.sidebar:
+        st.divider()
         uploaded_file = st.file_uploader("Video file", type=["mp4", "avi", "mov", "mkv"])
         metadata = None
         if uploaded_file:
@@ -127,6 +241,133 @@ def main() -> None:
         render_results(last_run["result"], last_run["run_dir"])
     else:
         render_ready_state(uploaded_file.name)
+
+
+def render_users_page(api_client: MultiModalCVApiClient, current_user: dict) -> None:
+    st.title("Пользователи")
+    token = st.session_state["access_token"]
+
+    with st.expander("Создать пользователя", expanded=False):
+        with st.form("create_user_form", clear_on_submit=True):
+            username = st.text_input("Имя пользователя")
+            password = st.text_input("Временный пароль", type="password")
+            role = st.selectbox(
+                "Роль",
+                tuple(ROLE_LABELS),
+                format_func=lambda value: ROLE_LABELS[value],
+            )
+            submitted = st.form_submit_button("Создать", type="primary")
+        if submitted:
+            try:
+                api_client.create_user(
+                    token,
+                    username=username,
+                    password=password,
+                    role=role,
+                )
+            except ApiClientError as error:
+                st.error(str(error))
+            else:
+                st.success("Пользователь создан.")
+                st.rerun()
+
+    try:
+        users = api_client.list_users(token)
+    except ApiClientError as error:
+        st.error(str(error))
+        return
+
+    st.dataframe(
+        users_dataframe(users),
+        use_container_width=True,
+        hide_index=True,
+    )
+
+    editable_users = [user for user in users if user["id"] != current_user["id"]]
+    if not editable_users:
+        return
+
+    selected_user = st.selectbox(
+        "Учетная запись",
+        editable_users,
+        format_func=lambda user: f"{user['username']} ({ROLE_LABELS[user['role']]})",
+    )
+    left, right = st.columns(2)
+    with left:
+        selected_role = st.selectbox(
+            "Новая роль",
+            tuple(ROLE_LABELS),
+            index=tuple(ROLE_LABELS).index(selected_user["role"]),
+            format_func=lambda value: ROLE_LABELS[value],
+        )
+        selected_active = st.checkbox("Учетная запись активна", value=selected_user["is_active"])
+        if st.button("Сохранить изменения", type="primary"):
+            try:
+                api_client.update_user(
+                    token,
+                    int(selected_user["id"]),
+                    role=selected_role,
+                    is_active=selected_active,
+                )
+            except ApiClientError as error:
+                st.error(str(error))
+            else:
+                st.success("Изменения сохранены.")
+                st.rerun()
+
+    with right:
+        with st.form("reset_password_form", clear_on_submit=True):
+            new_password = st.text_input("Новый пароль", type="password")
+            reset_submitted = st.form_submit_button("Сбросить пароль")
+        if reset_submitted:
+            try:
+                api_client.reset_password(token, int(selected_user["id"]), new_password)
+            except ApiClientError as error:
+                st.error(str(error))
+            else:
+                st.success("Пароль изменен, активные сессии пользователя завершены.")
+
+
+def users_dataframe(users: list[dict]) -> pd.DataFrame:
+    rows = [
+        {
+            "ID": user["id"],
+            "Пользователь": user["username"],
+            "Роль": ROLE_LABELS.get(user["role"], user["role"]),
+            "Статус": "Активен" if user["is_active"] else "Заблокирован",
+        }
+        for user in users
+    ]
+    return pd.DataFrame(rows)
+
+
+def render_audit_page(api_client: MultiModalCVApiClient) -> None:
+    st.title("Журнал действий")
+    try:
+        entries = api_client.list_audit(st.session_state["access_token"], limit=200)
+    except ApiClientError as error:
+        st.error(str(error))
+        return
+
+    if not entries:
+        st.info("Журнал пока пуст.")
+        return
+
+    st.dataframe(audit_dataframe(entries), use_container_width=True, hide_index=True)
+
+
+def audit_dataframe(entries: list[dict]) -> pd.DataFrame:
+    return pd.DataFrame(
+        [
+            {
+                "Время": entry["created_at"],
+                "Пользователь": entry.get("username") or "-",
+                "Действие": entry["action"],
+                "Подробности": entry.get("details") or "-",
+            }
+            for entry in entries
+        ]
+    )
 
 
 def inject_styles() -> None:

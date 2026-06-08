@@ -1,12 +1,15 @@
 from pathlib import Path
 
 from interfaces.streamlit_app.app import (
+    audit_dataframe,
+    available_pages,
     build_command_interpreter,
     center_zone_rect,
     find_frame_by_name,
     format_zone_rect,
     full_frame_zone_rect,
     render_command_preview,
+    users_dataframe,
     zone_rect_values,
 )
 from multimodalcv.commands.parser import CommandIntent
@@ -103,3 +106,50 @@ def test_render_command_preview_uses_supplied_interpreter() -> None:
 
     assert isinstance(intent, CommandIntent)
     assert intent.name == "track_person"
+
+
+def test_available_pages_depend_on_role() -> None:
+    assert available_pages("admin") == (
+        "Обзор",
+        "Анализ видео",
+        "Пользователи",
+        "Журнал действий",
+    )
+    assert available_pages("operator") == ("Обзор", "Анализ видео")
+    assert available_pages("viewer") == ("Обзор",)
+
+
+def test_users_dataframe_translates_role_and_status() -> None:
+    dataframe = users_dataframe(
+        [
+            {
+                "id": 3,
+                "username": "viewer",
+                "role": "viewer",
+                "is_active": False,
+            }
+        ]
+    )
+
+    assert dataframe.iloc[0].to_dict() == {
+        "ID": 3,
+        "Пользователь": "viewer",
+        "Роль": "Наблюдатель",
+        "Статус": "Заблокирован",
+    }
+
+
+def test_audit_dataframe_formats_optional_values() -> None:
+    dataframe = audit_dataframe(
+        [
+            {
+                "created_at": "2026-06-08T12:00:00+00:00",
+                "username": None,
+                "action": "login_failed",
+                "details": None,
+            }
+        ]
+    )
+
+    assert dataframe.iloc[0]["Пользователь"] == "-"
+    assert dataframe.iloc[0]["Подробности"] == "-"
