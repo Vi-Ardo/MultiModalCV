@@ -10,7 +10,10 @@ from uuid import uuid4
 import pandas as pd
 import streamlit as st
 
-from interfaces.streamlit_app.api_client import ApiClientError, MultiModalCVApiClient
+try:
+    from interfaces.streamlit_app.api_client import ApiClientError, MultiModalCVApiClient
+except ModuleNotFoundError:
+    from api_client import ApiClientError, MultiModalCVApiClient
 from multimodalcv.cli.analyze import AnalyzeResult, analyze_video
 from multimodalcv.commands.interpreter import (
     CommandInterpreter,
