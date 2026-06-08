@@ -7,10 +7,12 @@ from interfaces.streamlit_app.app import (
     build_command_interpreter,
     center_zone_rect,
     event_dicts_to_dataframe,
+    filter_analysis_runs,
     find_frame_by_name,
     format_zone_rect,
     full_frame_zone_rect,
     render_command_preview,
+    role_capabilities,
     users_dataframe,
     zone_rect_values,
 )
@@ -120,6 +122,36 @@ def test_available_pages_depend_on_role() -> None:
     )
     assert available_pages("operator") == ("Обзор", "Анализ видео", "История анализов")
     assert available_pages("viewer") == ("Обзор", "История анализов")
+
+
+def test_role_capabilities_depend_on_role() -> None:
+    assert len(role_capabilities("admin")) == 3
+    assert len(role_capabilities("operator")) == 2
+    assert role_capabilities("viewer")[0][0] == "История"
+
+
+def test_filter_analysis_runs_combines_filters() -> None:
+    runs = [
+        {
+            "video_name": "entrance.mp4",
+            "command": "Посчитай людей",
+            "username": "operator",
+            "status": "completed",
+        },
+        {
+            "video_name": "parking.mp4",
+            "command": "Следи за машиной",
+            "username": "admin",
+            "status": "failed",
+        },
+    ]
+
+    assert filter_analysis_runs(
+        runs,
+        query="людей",
+        author="operator",
+        status="completed",
+    ) == [runs[0]]
 
 
 def test_users_dataframe_translates_role_and_status() -> None:

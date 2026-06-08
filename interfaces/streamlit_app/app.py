@@ -49,6 +49,11 @@ ROLE_LABELS = {
     "operator": "Оператор",
     "viewer": "Наблюдатель",
 }
+STATUS_LABELS = {
+    "completed": "Завершен",
+    "failed": "Ошибка",
+    "running": "Выполняется",
+}
 
 
 def main() -> None:
@@ -90,14 +95,14 @@ def authenticated_user(api_client: MultiModalCVApiClient) -> dict | None:
 
 
 def render_login_page(api_client: MultiModalCVApiClient) -> None:
-    st.title("MultiModalCV")
-    st.subheader("Вход в систему")
-
     left, center, right = st.columns([1, 1.25, 1])
     with center:
+        st.title("MultiModalCV")
+        st.caption("Анализ архивных видеозаписей по текстовым командам")
+        st.subheader("Вход в систему")
         with st.form("login_form"):
-            username = st.text_input("Имя пользователя")
-            password = st.text_input("Пароль", type="password")
+            username = st.text_input("Имя пользователя", placeholder="Введите логин")
+            password = st.text_input("Пароль", type="password", placeholder="Введите пароль")
             submitted = st.form_submit_button("Войти", type="primary", use_container_width=True)
 
         if submitted:
@@ -118,8 +123,12 @@ def render_navigation(user: dict, api_client: MultiModalCVApiClient) -> str:
 
     with st.sidebar:
         st.title("MultiModalCV")
-        st.write(f"**{user['username']}**")
-        st.caption(ROLE_LABELS.get(role, role))
+        st.markdown(f'<div class="account-name">{user["username"]}</div>', unsafe_allow_html=True)
+        st.markdown(
+            f'<div class="role-badge">{ROLE_LABELS.get(role, role)}</div>',
+            unsafe_allow_html=True,
+        )
+        st.divider()
         page = st.radio("Раздел", pages)
         if st.button("Выйти", use_container_width=True):
             token = st.session_state.get("access_token")
@@ -148,6 +157,22 @@ def available_pages(role: str) -> tuple[str, ...]:
     return ("Обзор", "История анализов")
 
 
+def role_capabilities(role: str) -> tuple[tuple[str, str], ...]:
+    common = ("История", "Просмотр сохраненных результатов и кадров событий.")
+    if role == "admin":
+        return (
+            ("Анализ", "Запуск обработки архивных видеозаписей."),
+            ("Пользователи", "Создание учетных записей и настройка ролей."),
+            ("Контроль", "Просмотр журнала действий системы."),
+        )
+    if role == "operator":
+        return (
+            ("Анализ", "Загрузка видео и выполнение текстовых команд."),
+            common,
+        )
+    return (common,)
+
+
 def clear_auth_session() -> None:
     st.session_state.pop("access_token", None)
     st.session_state.pop("current_user", None)
@@ -157,22 +182,24 @@ def clear_auth_session() -> None:
 def render_overview_page(user: dict) -> None:
     st.title("Обзор")
     role = str(user["role"])
-    st.write(f"Вы вошли как **{ROLE_LABELS.get(role, role)}**.")
+    st.caption(f"Текущая роль: {ROLE_LABELS.get(role, role)}")
 
-    if role == "admin":
-        st.info("Доступны анализ видео, управление пользователями и журнал действий.")
-    elif role == "operator":
-        st.info("Доступны загрузка видео и запуск анализа.")
-    else:
-        st.info("Доступны обзор и просмотр сохраненных результатов. Запуск анализа запрещен.")
+    capabilities = role_capabilities(role)
+    columns = st.columns(len(capabilities))
+    for column, (title, description) in zip(columns, capabilities, strict=True):
+        with column:
+            st.markdown(f"#### {title}")
+            st.write(description)
 
 
 def render_analysis_page(api_client: MultiModalCVApiClient) -> None:
     st.title("Анализ видео")
+    st.caption("Загрузите запись, сформулируйте команду и запустите обработку.")
 
     with st.sidebar:
         st.divider()
-        uploaded_file = st.file_uploader("Video file", type=["mp4", "avi", "mov", "mkv"])
+        st.subheader("Параметры анализа")
+        uploaded_file = st.file_uploader("Видеофайл", type=["mp4", "avi", "mov", "mkv"])
         metadata = None
         if uploaded_file:
             preview_video_path = save_uploaded_video(uploaded_file, RUNS_DIR / "_preview")
@@ -182,35 +209,62 @@ def render_analysis_page(api_client: MultiModalCVApiClient) -> None:
             except VideoOpenError as error:
                 st.error(str(error))
 
-        interpreter_mode = st.selectbox("Command interpreter", INTERPRETER_MODES, index=0)
+        command = st.text_area("Текстовая команда", value=DEFAULT_COMMAND, height=90)
+        interpreter_mode = "Deterministic"
         ollama_model = DEFAULT_OLLAMA_MODEL
-        if interpreter_mode == "Deterministic + Ollama fallback":
-            ollama_model = st.text_input("Ollama model", value=DEFAULT_OLLAMA_MODEL)
-        command_interpreter = build_command_interpreter(interpreter_mode, ollama_model=ollama_model)
-        command = st.text_input("Command", value=DEFAULT_COMMAND)
-        render_command_preview(command, command_interpreter)
-        detector = st.selectbox("Detector", ["yolo", "fake"], index=0)
-        model_path = st.text_input("YOLO model", value="yolov8n.pt")
+        detector = "yolo"
+        model_path = "yolov8n.pt"
         max_frame_limit = metadata.frame_count if metadata and metadata.frame_count > 0 else 5000
-        max_frames = st.number_input(
-            "Max frames",
-            min_value=1,
-            max_value=max_frame_limit,
-            value=min(100, max_frame_limit),
-            step=10,
-        )
+        max_frames = min(100, max_frame_limit)
+        confidence = DEFAULT_CONFIDENCE
+        count_window_size = 5
+        event_cooldown_sec = 2.0
+        frame_mode = "events"
+
+        with st.expander("Дополнительные настройки"):
+            interpreter_mode = st.selectbox("Интерпретатор команд", INTERPRETER_MODES, index=0)
+            if interpreter_mode == "Deterministic + Ollama fallback":
+                ollama_model = st.text_input("Модель Ollama", value=DEFAULT_OLLAMA_MODEL)
+            detector = st.selectbox("Детектор", ["yolo", "fake"], index=0)
+            model_path = st.text_input("Модель YOLO", value="yolov8n.pt")
+            max_frames = st.number_input(
+                "Максимум кадров",
+                min_value=1,
+                max_value=max_frame_limit,
+                value=min(100, max_frame_limit),
+                step=10,
+            )
+            confidence = st.slider(
+                "Порог уверенности",
+                min_value=0.05,
+                max_value=0.95,
+                value=DEFAULT_CONFIDENCE,
+                step=0.05,
+            )
+            count_window_size = st.number_input(
+                "Окно сглаживания",
+                min_value=1,
+                max_value=31,
+                value=5,
+                step=2,
+            )
+            event_cooldown_sec = st.number_input(
+                "Интервал между событиями, сек.",
+                min_value=0.0,
+                max_value=30.0,
+                value=2.0,
+                step=0.5,
+            )
+            frame_mode = st.selectbox(
+                "Сохранять кадры",
+                ["events", "all"],
+                format_func=lambda value: "Только события" if value == "events" else "Все кадры",
+            )
+
+        command_interpreter = build_command_interpreter(interpreter_mode, ollama_model=ollama_model)
+        render_command_preview(command, command_interpreter)
         zone_rect = render_zone_controls(metadata)
-        confidence = st.slider(
-            "Confidence",
-            min_value=0.05,
-            max_value=0.95,
-            value=DEFAULT_CONFIDENCE,
-            step=0.05,
-        )
-        count_window_size = st.number_input("Count smoothing window", min_value=1, max_value=31, value=5, step=2)
-        event_cooldown_sec = st.number_input("Event cooldown, sec", min_value=0.0, max_value=30.0, value=2.0, step=0.5)
-        frame_mode = st.selectbox("Annotated frames", ["events", "all"], index=0)
-        run_clicked = st.button("Analyze", type="primary", use_container_width=True)
+        run_clicked = st.button("Запустить анализ", type="primary", use_container_width=True)
 
     if not uploaded_file:
         render_empty_state()
@@ -219,7 +273,7 @@ def render_analysis_page(api_client: MultiModalCVApiClient) -> None:
     if run_clicked:
         run_dir = RUNS_DIR / uuid4().hex[:12]
         video_path = save_uploaded_video(uploaded_file, run_dir)
-        with st.spinner("Analyzing video..."):
+        with st.spinner("Видео обрабатывается..."):
             try:
                 result = analyze_video(
                     video_path=video_path,
@@ -291,6 +345,7 @@ def save_analysis_history(
 
 def render_analysis_history_page(api_client: MultiModalCVApiClient) -> None:
     st.title("История анализов")
+    st.caption("Сохраненные результаты доступны всем ролям в режиме просмотра.")
     token = st.session_state["access_token"]
     try:
         runs = api_client.list_analysis_runs(token, limit=200)
@@ -300,6 +355,23 @@ def render_analysis_history_page(api_client: MultiModalCVApiClient) -> None:
 
     if not runs:
         st.info("Сохраненных анализов пока нет.")
+        return
+
+    search_column, author_column, status_column = st.columns([2, 1, 1])
+    with search_column:
+        query = st.text_input("Поиск", placeholder="Видео или команда")
+    with author_column:
+        author = st.selectbox("Автор", ["Все", *sorted({run["username"] for run in runs})])
+    with status_column:
+        status = st.selectbox(
+            "Статус",
+            ["Все", *sorted({run["status"] for run in runs})],
+            format_func=lambda value: STATUS_LABELS.get(value, value),
+        )
+
+    runs = filter_analysis_runs(runs, query=query, author=author, status=status)
+    if not runs:
+        st.info("По заданным фильтрам результатов нет.")
         return
 
     st.dataframe(analysis_runs_dataframe(runs), use_container_width=True, hide_index=True)
@@ -329,13 +401,34 @@ def analysis_runs_dataframe(runs: list[dict]) -> pd.DataFrame:
                 "Видео": run["video_name"],
                 "Команда": run["command"],
                 "Автор": run["username"],
-                "Статус": run["status"],
+                "Статус": STATUS_LABELS.get(run["status"], run["status"]),
                 "Кадры": run["processed_frames"],
                 "События": run["event_count"],
             }
             for run in runs
         ]
     )
+
+
+def filter_analysis_runs(
+    runs: list[dict],
+    *,
+    query: str = "",
+    author: str = "Все",
+    status: str = "Все",
+) -> list[dict]:
+    normalized_query = query.strip().casefold()
+    return [
+        run
+        for run in runs
+        if (author == "Все" or run["username"] == author)
+        and (status == "Все" or run["status"] == status)
+        and (
+            not normalized_query
+            or normalized_query in str(run["video_name"]).casefold()
+            or normalized_query in str(run["command"]).casefold()
+        )
+    ]
 
 
 def render_saved_analysis(run: dict) -> None:
@@ -499,10 +592,27 @@ def inject_styles() -> None:
         """
         <style>
         .block-container {
-            padding-top: 1.5rem;
+            padding-top: 2rem;
+            max-width: 1400px;
         }
         div[data-testid="stMetricValue"] {
             font-size: 1.65rem;
+        }
+        .account-name {
+            font-size: 1.05rem;
+            font-weight: 650;
+            margin-top: 0.5rem;
+        }
+        .role-badge {
+            display: inline-block;
+            padding: 0.2rem 0.55rem;
+            margin-top: 0.35rem;
+            border: 1px solid rgba(128, 128, 128, 0.35);
+            border-radius: 4px;
+            font-size: 0.8rem;
+        }
+        [data-testid="stForm"] {
+            border-radius: 6px;
         }
         </style>
         """,
@@ -511,11 +621,11 @@ def inject_styles() -> None:
 
 
 def render_empty_state() -> None:
-    st.info("Upload an archived video file to start analysis.")
+    st.info("Загрузите архивный видеофайл в панели слева.")
 
 
 def render_ready_state(filename: str) -> None:
-    st.success(f"Ready to analyze: {filename}")
+    st.success(f"Файл «{filename}» готов к анализу.")
 
 
 def build_command_interpreter(
