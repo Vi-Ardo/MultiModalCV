@@ -13,6 +13,7 @@ multimodalcv-analyze = "multimodalcv.cli.analyze:main"
 multimodalcv-demo = "multimodalcv.cli.demo:main"
 multimodalcv-video = "multimodalcv.cli.video:main"
 multimodalcv-create-admin = "multimodalcv.cli.create_admin:main"
+multimodalcv-start = "multimodalcv.cli.serve:main"
 
 [tool.setuptools.packages.find]
 include = ["multimodalcv*"]

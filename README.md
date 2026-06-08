@@ -186,19 +186,20 @@ Each analysis run also writes `summary.json` next to `events.json` by default. U
 
 ## Run Streamlit Interface
 
-Start the FastAPI backend first:
+On Windows, start the complete application with one file:
 
-```powershell
-.venv\Scripts\uvicorn.exe multimodalcv.api.app:app --host 127.0.0.1 --port 8000
+```text
+start_app.bat
 ```
 
-Then start the interface in another terminal:
+Alternatively, run the launcher from PowerShell:
 
 ```powershell
-.venv\Scripts\streamlit.exe run interfaces\streamlit_app\app.py
+.venv\Scripts\python.exe -m multimodalcv.cli.serve
 ```
 
-Then open:
+The launcher starts the API and interface, opens the browser, and stops both
+services when `Ctrl+C` is pressed. The interface is available at:
 
 ```text
 http://localhost:8501
@@ -206,8 +207,7 @@ http://localhost:8501
 
 The interface starts with a login page and builds its navigation from the current
 role. Administrators can manage users and view the audit log. Operators can run
-video analysis. Viewers have read-only access to the overview and saved analysis
-history.
+video analysis. Viewers have read-only access to saved analysis history.
 
 The analysis page supports video upload, text commands, YOLO/fake detector mode,
 zone rectangle settings, count smoothing, event cooldown, summary metrics, event
